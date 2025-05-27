@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		6CA6166E3AB16FFEF2CEA0CA /* Pods_CollageMaker_CollageMakerUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 240E51B42A15837978ED3263 /* Pods_CollageMaker_CollageMakerUITests.framework */; };
+		8DABC64C59CAAC60F1F0BBE5 /* Pods_CollageMaker.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A4E491FF7F1338C71DA47106 /* Pods_CollageMaker.framework */; };
+		DB3880B690AB3A2920923D65 /* Pods_CollageMakerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 319369DB3B96691E8060B05C /* Pods_CollageMakerTests.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		FC6CF07C2D4A357F00CC9A4A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,6 +30,15 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		01D857EE8787A880E616681A /* Pods-CollageMaker.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CollageMaker.debug.xcconfig"; path = "Target Support Files/Pods-CollageMaker/Pods-CollageMaker.debug.xcconfig"; sourceTree = "<group>"; };
+		240E51B42A15837978ED3263 /* Pods_CollageMaker_CollageMakerUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_CollageMaker_CollageMakerUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		319369DB3B96691E8060B05C /* Pods_CollageMakerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_CollageMakerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		7CE6AE1727534D4906C2176E /* Pods-CollageMaker-CollageMakerUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CollageMaker-CollageMakerUITests.release.xcconfig"; path = "Target Support Files/Pods-CollageMaker-CollageMakerUITests/Pods-CollageMaker-CollageMakerUITests.release.xcconfig"; sourceTree = "<group>"; };
+		A4E491FF7F1338C71DA47106 /* Pods_CollageMaker.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_CollageMaker.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B14A8E84B3984B415B908316 /* Pods-CollageMakerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CollageMakerTests.release.xcconfig"; path = "Target Support Files/Pods-CollageMakerTests/Pods-CollageMakerTests.release.xcconfig"; sourceTree = "<group>"; };
+		B2EA53D0AE4D330BBFB74571 /* Pods-CollageMakerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CollageMakerTests.debug.xcconfig"; path = "Target Support Files/Pods-CollageMakerTests/Pods-CollageMakerTests.debug.xcconfig"; sourceTree = "<group>"; };
+		E9C66EC4BF991AF22DAF9BB6 /* Pods-CollageMaker-CollageMakerUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CollageMaker-CollageMakerUITests.debug.xcconfig"; path = "Target Support Files/Pods-CollageMaker-CollageMakerUITests/Pods-CollageMaker-CollageMakerUITests.debug.xcconfig"; sourceTree = "<group>"; };
+		F4E2EFE10EEACECB57A7209E /* Pods-CollageMaker.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CollageMaker.release.xcconfig"; path = "Target Support Files/Pods-CollageMaker/Pods-CollageMaker.release.xcconfig"; sourceTree = "<group>"; };
 		FC6CF0652D4A357D00CC9A4A /* CollageMaker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CollageMaker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FC6CF07B2D4A357F00CC9A4A /* CollageMakerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CollageMakerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FC6CF0852D4A357F00CC9A4A /* CollageMakerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CollageMakerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -50,11 +65,15 @@
 		};
 		FC6CF07E2D4A357F00CC9A4A /* CollageMakerTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = CollageMakerTests;
 			sourceTree = "<group>";
 		};
 		FC6CF0882D4A357F00CC9A4A /* CollageMakerUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = CollageMakerUITests;
 			sourceTree = "<group>";
 		};
@@ -65,6 +84,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8DABC64C59CAAC60F1F0BBE5 /* Pods_CollageMaker.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -72,6 +92,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DB3880B690AB3A2920923D65 /* Pods_CollageMakerTests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -79,12 +100,36 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6CA6166E3AB16FFEF2CEA0CA /* Pods_CollageMaker_CollageMakerUITests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		153FB2F88C471FEA1060A716 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A4E491FF7F1338C71DA47106 /* Pods_CollageMaker.framework */,
+				240E51B42A15837978ED3263 /* Pods_CollageMaker_CollageMakerUITests.framework */,
+				319369DB3B96691E8060B05C /* Pods_CollageMakerTests.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		22314C09DADD6387B81C3002 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				01D857EE8787A880E616681A /* Pods-CollageMaker.debug.xcconfig */,
+				F4E2EFE10EEACECB57A7209E /* Pods-CollageMaker.release.xcconfig */,
+				E9C66EC4BF991AF22DAF9BB6 /* Pods-CollageMaker-CollageMakerUITests.debug.xcconfig */,
+				7CE6AE1727534D4906C2176E /* Pods-CollageMaker-CollageMakerUITests.release.xcconfig */,
+				B2EA53D0AE4D330BBFB74571 /* Pods-CollageMakerTests.debug.xcconfig */,
+				B14A8E84B3984B415B908316 /* Pods-CollageMakerTests.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		FC6CF05C2D4A357D00CC9A4A = {
 			isa = PBXGroup;
 			children = (
@@ -92,6 +137,8 @@
 				FC6CF07E2D4A357F00CC9A4A /* CollageMakerTests */,
 				FC6CF0882D4A357F00CC9A4A /* CollageMakerUITests */,
 				FC6CF0662D4A357D00CC9A4A /* Products */,
+				22314C09DADD6387B81C3002 /* Pods */,
+				153FB2F88C471FEA1060A716 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -112,9 +159,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = FC6CF08E2D4A357F00CC9A4A /* Build configuration list for PBXNativeTarget "CollageMaker" */;
 			buildPhases = (
+				7D229EE40FF0CEF0E57A5810 /* [CP] Check Pods Manifest.lock */,
 				FC6CF0612D4A357D00CC9A4A /* Sources */,
 				FC6CF0622D4A357D00CC9A4A /* Frameworks */,
 				FC6CF0632D4A357D00CC9A4A /* Resources */,
+				57DAFA3EA1CD96BE64157C01 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -124,8 +173,6 @@
 				FC6CF0672D4A357D00CC9A4A /* CollageMaker */,
 			);
 			name = CollageMaker;
-			packageProductDependencies = (
-			);
 			productName = CollageMaker;
 			productReference = FC6CF0652D4A357D00CC9A4A /* CollageMaker.app */;
 			productType = "com.apple.product-type.application";
@@ -134,6 +181,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = FC6CF0932D4A357F00CC9A4A /* Build configuration list for PBXNativeTarget "CollageMakerTests" */;
 			buildPhases = (
+				AF4DAE774E9799522C9A2438 /* [CP] Check Pods Manifest.lock */,
 				FC6CF0772D4A357F00CC9A4A /* Sources */,
 				FC6CF0782D4A357F00CC9A4A /* Frameworks */,
 				FC6CF0792D4A357F00CC9A4A /* Resources */,
@@ -147,8 +195,6 @@
 				FC6CF07E2D4A357F00CC9A4A /* CollageMakerTests */,
 			);
 			name = CollageMakerTests;
-			packageProductDependencies = (
-			);
 			productName = CollageMakerTests;
 			productReference = FC6CF07B2D4A357F00CC9A4A /* CollageMakerTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -157,9 +203,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = FC6CF0962D4A357F00CC9A4A /* Build configuration list for PBXNativeTarget "CollageMakerUITests" */;
 			buildPhases = (
+				1AC20197E196DC266D476627 /* [CP] Check Pods Manifest.lock */,
 				FC6CF0812D4A357F00CC9A4A /* Sources */,
 				FC6CF0822D4A357F00CC9A4A /* Frameworks */,
 				FC6CF0832D4A357F00CC9A4A /* Resources */,
+				84C6E43C72BAAF390E96040C /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -170,8 +218,6 @@
 				FC6CF0882D4A357F00CC9A4A /* CollageMakerUITests */,
 			);
 			name = CollageMakerUITests;
-			packageProductDependencies = (
-			);
 			productName = CollageMakerUITests;
 			productReference = FC6CF0852D4A357F00CC9A4A /* CollageMakerUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -184,7 +230,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 1620;
+				LastUpgradeCheck = 1630;
 				TargetAttributes = {
 					FC6CF0642D4A357D00CC9A4A = {
 						CreatedOnToolsVersion = 16.2;
@@ -208,6 +254,9 @@
 			);
 			mainGroup = FC6CF05C2D4A357D00CC9A4A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				2C266D712DE4C555003BB247 /* XCRemoteSwiftPackageReference "SnapKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FC6CF0662D4A357D00CC9A4A /* Products */;
 			projectDirPath = "";
@@ -243,6 +292,109 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		1AC20197E196DC266D476627 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-CollageMaker-CollageMakerUITests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		57DAFA3EA1CD96BE64157C01 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-CollageMaker/Pods-CollageMaker-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-CollageMaker/Pods-CollageMaker-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-CollageMaker/Pods-CollageMaker-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		7D229EE40FF0CEF0E57A5810 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-CollageMaker-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		84C6E43C72BAAF390E96040C /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-CollageMaker-CollageMakerUITests/Pods-CollageMaker-CollageMakerUITests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-CollageMaker-CollageMakerUITests/Pods-CollageMaker-CollageMakerUITests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-CollageMaker-CollageMakerUITests/Pods-CollageMaker-CollageMakerUITests-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		AF4DAE774E9799522C9A2438 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-CollageMakerTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		FC6CF0612D4A357D00CC9A4A /* Sources */ = {
@@ -284,19 +436,22 @@
 /* Begin XCBuildConfiguration section */
 		FC6CF08F2D4A357F00CC9A4A /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 01D857EE8787A880E616681A /* Pods-CollageMaker.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 92MV8RSM99;
+				DEVELOPMENT_TEAM = 22H5996C88;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CollageMaker/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UIMainStoryboardFile = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -312,19 +467,22 @@
 		};
 		FC6CF0902D4A357F00CC9A4A /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = F4E2EFE10EEACECB57A7209E /* Pods-CollageMaker.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 92MV8RSM99;
+				DEVELOPMENT_TEAM = 22H5996C88;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CollageMaker/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UIMainStoryboardFile = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -373,6 +531,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 92MV8RSM99;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -436,6 +595,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 92MV8RSM99;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -459,11 +619,11 @@
 		};
 		FC6CF0942D4A357F00CC9A4A /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B2EA53D0AE4D330BBFB74571 /* Pods-CollageMakerTests.debug.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 92MV8RSM99;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MARKETING_VERSION = 1.0;
@@ -478,11 +638,11 @@
 		};
 		FC6CF0952D4A357F00CC9A4A /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B14A8E84B3984B415B908316 /* Pods-CollageMakerTests.release.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 92MV8RSM99;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MARKETING_VERSION = 1.0;
@@ -497,10 +657,10 @@
 		};
 		FC6CF0972D4A357F00CC9A4A /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E9C66EC4BF991AF22DAF9BB6 /* Pods-CollageMaker-CollageMakerUITests.debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 92MV8RSM99;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = FTS.CollageMakerUITests;
@@ -514,10 +674,10 @@
 		};
 		FC6CF0982D4A357F00CC9A4A /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7CE6AE1727534D4906C2176E /* Pods-CollageMaker-CollageMakerUITests.release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 92MV8RSM99;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = FTS.CollageMakerUITests;
@@ -569,6 +729,17 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		2C266D712DE4C555003BB247 /* XCRemoteSwiftPackageReference "SnapKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SnapKit/SnapKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.7.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 	};
 	rootObject = FC6CF05D2D4A357D00CC9A4A /* Project object */;
 }
