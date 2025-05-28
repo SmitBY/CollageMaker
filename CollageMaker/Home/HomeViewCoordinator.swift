@@ -21,6 +21,7 @@ class HomeViewCoordinator: Coordinator {
     
     func start() {
         let homeViewModel = HomeViewModel()
+        homeViewModel.coordinator = self
         let homeVC = HomeViewController(viewModel: homeViewModel)
         _ = homeVC.view // Force load the view
         

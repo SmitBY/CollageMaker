@@ -58,4 +58,12 @@ class HomeTabBarCoordinator: Coordinator {
         photoEditorVC.modalPresentationStyle = .overFullScreen
         navigationController.present(photoEditorVC, animated: true, completion: nil)
     }
+    
+    /// Переключает на вкладку галереи
+    func showGallery() {
+        if let homeTabBarController = navigationController.viewControllers.first as? HomeTabBarController {
+            // Переключаемся на вкладку галереи (индекс 0)
+            homeTabBarController.selectGalleryTab()
+        }
+    }
 }

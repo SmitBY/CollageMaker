@@ -41,8 +41,25 @@ class CollageEditorViewController: UIViewController {
         return button
     }()
     
+    let addTextButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "textformat"), for: .normal)
+        button.tintColor = .white
+        button.backgroundColor = .systemBlue
+        button.layer.cornerRadius = 22
+        return button
+    }()
+    
     // Данные для коллажа
     private var selectedPhotos: [UIImage] = [] // Выбранные пользователем фотографии
+    private var textLayers: [TextLayerView] = [] // Текстовые слои
+    private var borderViews: [BorderDragView] = [] // Границы для изменения размеров
+    private var currentTextLayer: TextLayerView?
+    private var textEditingPanel: TextEditingPanel?
+    
+    // Сохраняем текущие размеры сетки
+    private var currentColumnWidths: [CGFloat] = []
+    private var currentRowHeights: [CGFloat] = []
     
     /// Stores the currently selected image's index path (for image picker usage)
     private var currentIndexPath: IndexPath?
@@ -81,27 +98,60 @@ class CollageEditorViewController: UIViewController {
     // MARK: - UI Setup
     
     private func setupUI() {
-        view.backgroundColor = .white
+        view.backgroundColor = .systemGray6
         
         // Добавляем элементы интерфейса
         view.addSubview(collageView)
         view.addSubview(saveButton)
+        view.addSubview(addTextButton)
         
-        // Настройка constraints
-        collageView.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide).offset(20)
-            make.leading.trailing.equalToSuperview().inset(20)
-            make.bottom.equalTo(saveButton.snp.top).offset(-20)
-        }
+        // Настройка квадратной области редактирования
+        setupSquareEditingArea()
         
         saveButton.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview().inset(20)
             make.bottom.equalTo(view.safeAreaLayoutGuide).offset(-10)
             make.height.equalTo(50)
         }
+        
+        addTextButton.snp.makeConstraints { make in
+            make.trailing.equalToSuperview().inset(20)
+            make.bottom.equalTo(saveButton.snp.top).offset(-20)
+            make.size.equalTo(44)
+        }
     }
     
-
+    private func setupSquareEditingArea() {
+        // Вычисляем размер квадратной области
+        let screenWidth = UIScreen.main.bounds.width
+        let margin: CGFloat = 20
+        let availableWidth = screenWidth - (margin * 2)
+        
+        // Учитываем высоту для кнопок снизу
+        let buttonAreaHeight: CGFloat = 120 // кнопка сохранить + отступы + кнопка текста
+        let topMargin: CGFloat = 20
+        let availableHeight = view.bounds.height - view.safeAreaInsets.top - view.safeAreaInsets.bottom - buttonAreaHeight - topMargin
+        
+        // Берем минимальное значение для создания квадрата
+        let squareSize = min(availableWidth, availableHeight)
+        
+        // Настраиваем collageView как квадратную область
+        collageView.backgroundColor = .white
+        collageView.layer.cornerRadius = 12
+        collageView.layer.borderWidth = 2
+        collageView.layer.borderColor = UIColor.systemBlue.cgColor
+        collageView.layer.shadowColor = UIColor.black.cgColor
+        collageView.layer.shadowOffset = CGSize(width: 0, height: 2)
+        collageView.layer.shadowRadius = 8
+        collageView.layer.shadowOpacity = 0.1
+        collageView.clipsToBounds = true
+        
+        collageView.snp.makeConstraints { make in
+            make.centerX.equalToSuperview()
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(topMargin)
+            make.width.height.equalTo(squareSize)
+        }
+    }
     
     private func fillCollageWithSelectedPhotos() {
         guard let gridContainer = collageView.viewWithTag(gridContainerTag) else { return }
@@ -111,13 +161,50 @@ class CollageEditorViewController: UIViewController {
                let tileView = gridContainer.subviews[safe: index] as? UIView,
                let imageView = tileView.subviews.first as? UIImageView {
                 
-                imageView.image = photo
-                imageView.contentMode = .scaleAspectFill
-                
-                let indexPath = IndexPath(item: index, section: 0)
-                viewModel.setImage(at: indexPath, image: photo)
+                // Проверяем, является ли изображение пустым (заглушкой)
+                if photo.size == .zero {
+                    // Устанавливаем placeholder и добавляем возможность выбора
+                    imageView.image = UIImage(named: "placeholder")
+                    imageView.contentMode = .scaleAspectFill
+                    
+                    // Добавляем кнопку "+" для выбора изображения
+                    let addButton = UIButton(type: .system)
+                    addButton.setImage(UIImage(systemName: "plus.circle.fill"), for: .normal)
+                    addButton.tintColor = .systemBlue
+                    addButton.backgroundColor = .white
+                    addButton.layer.cornerRadius = 20
+                    addButton.tag = index
+                    
+                    tileView.addSubview(addButton)
+                    addButton.snp.makeConstraints { make in
+                        make.center.equalToSuperview()
+                        make.size.equalTo(40)
+                    }
+                    
+                    addButton.addTarget(self, action: #selector(addImageButtonTapped(_:)), for: .touchUpInside)
+                } else {
+                    // Обычное изображение
+                    imageView.image = photo
+                    imageView.contentMode = .scaleAspectFill
+                    
+                    let indexPath = IndexPath(item: index, section: 0)
+                    viewModel.setImage(at: indexPath, image: photo)
+                }
             }
         }
+    }
+    
+    @objc private func addImageButtonTapped(_ sender: UIButton) {
+        currentIndexPath = IndexPath(item: sender.tag, section: 0)
+        presentImagePicker()
+    }
+    
+    private func presentImagePicker() {
+        let imagePickerController = UIImagePickerController()
+        imagePickerController.delegate = self
+        imagePickerController.sourceType = .photoLibrary
+        imagePickerController.allowsEditing = false
+        present(imagePickerController, animated: true, completion: nil)
     }
     
     // MARK: - Collage View Setup
@@ -128,6 +215,10 @@ class CollageEditorViewController: UIViewController {
     private func setupCollageView(with template: CollageTemplate) {
         // Очищаем старый коллаж
         collageView.subviews.forEach { $0.removeFromSuperview() }
+        
+        // Сбрасываем сохраненные размеры сетки
+        currentColumnWidths.removeAll()
+        currentRowHeights.removeAll()
         
         // Force layout update to obtain correct bounds.
         view.layoutIfNeeded()
@@ -203,7 +294,7 @@ class CollageEditorViewController: UIViewController {
                 tileFrame.size.width = tileSide * 2 + innerMargin
             }
             
-            let tileView = UIView(frame: tileFrame)
+            let tileView = UIView()
             tileView.backgroundColor = .clear
             tileView.layer.borderColor = UIColor.white.cgColor
             tileView.layer.borderWidth = 1.0
@@ -212,11 +303,11 @@ class CollageEditorViewController: UIViewController {
             tileView.tag = index // Устанавливаем тег для идентификации
             
             // Создаем imageView для placeholder.
-            let imageView = UIImageView(frame: tileView.bounds)
-            imageView.contentMode = .scaleAspectFit
+            let imageView = UIImageView()
+            imageView.contentMode = .scaleAspectFill
             imageView.backgroundColor = .clear
             if let placeholder = UIImage(named: "placeholder") {
-                imageView.image = placeholder.resized(to: tileView.bounds.size)
+                imageView.image = placeholder
             }
             tileView.addSubview(imageView)
             imageView.snp.makeConstraints { make in
@@ -236,7 +327,21 @@ class CollageEditorViewController: UIViewController {
             imageView.addGestureRecognizer(rotationGesture)
             
             gridContainer.addSubview(tileView)
+            
+            // Устанавливаем constraints для плитки
+            tileView.snp.makeConstraints { make in
+                make.left.equalToSuperview().offset(tileFrame.origin.x)
+                make.top.equalToSuperview().offset(tileFrame.origin.y)
+                make.width.equalTo(tileFrame.size.width)
+                make.height.equalTo(tileFrame.size.height)
+            }
         }
+        
+        // Инициализируем базовые размеры сетки
+        initializeGridSizes(for: template, containerSize: CGSize(width: containerWidth, height: containerHeight))
+        
+        // Добавляем слайдеры между соседними фотографиями
+        setupResizableSliders(for: template, in: gridContainer)
     }
     
     // MARK: - Bindings
@@ -252,6 +357,149 @@ class CollageEditorViewController: UIViewController {
                 self?.saveCollage()
             })
             .disposed(by: disposeBag)
+        
+        addTextButton.rx.tap
+            .subscribe(onNext: { [weak self] in
+                self?.addTextLayer()
+            })
+            .disposed(by: disposeBag)
+    }
+    
+    // MARK: - Grid Size Management
+    
+    private func initializeGridSizes(for template: CollageTemplate, containerSize: CGSize) {
+        let outerMargin: CGFloat = 16
+        let innerMargin: CGFloat = 8
+        
+        // Определяем размеры сетки
+        let columns = (template.positions.map { $0.0 }.max() ?? 0) + 1
+        let rows = (template.positions.map { $0.1 }.max() ?? 0) + 1
+        
+        // Вычисляем доступное пространство
+        let availableWidth = containerSize.width - 2 * outerMargin - CGFloat(columns - 1) * innerMargin
+        let availableHeight = containerSize.height - 2 * outerMargin - CGFloat(rows - 1) * innerMargin
+        
+        // Базовые размеры (равномерное распределение)
+        let baseColumnWidth = availableWidth / CGFloat(columns)
+        let baseRowHeight = availableHeight / CGFloat(rows)
+        
+        // Инициализируем массивы размеров
+        currentColumnWidths = Array(repeating: baseColumnWidth, count: columns)
+        currentRowHeights = Array(repeating: baseRowHeight, count: rows)
+    }
+    
+    // MARK: - Border Drag Views
+    
+    private func setupResizableSliders(for template: CollageTemplate, in gridContainer: UIView) {
+        // Очищаем старые границы
+        borderViews.forEach { $0.removeFromSuperview() }
+        borderViews.removeAll()
+        
+        // Определяем, где нужны границы (между соседними фотографиями)
+        for i in 0..<template.positions.count {
+            for j in (i+1)..<template.positions.count {
+                let pos1 = template.positions[i]
+                let pos2 = template.positions[j]
+                
+                // Проверяем, являются ли фото соседними
+                let isHorizontalNeighbors = abs(pos1.0 - pos2.0) == 1 && pos1.1 == pos2.1
+                let isVerticalNeighbors = abs(pos1.1 - pos2.1) == 1 && pos1.0 == pos2.0
+                
+                if isHorizontalNeighbors || isVerticalNeighbors {
+                    guard let tile1 = gridContainer.viewWithTag(i),
+                          let tile2 = gridContainer.viewWithTag(j) else { continue }
+                    
+                    let borderView = BorderDragView()
+                    borderView.isVertical = isHorizontalNeighbors
+                    borderView.delegate = self
+                    borderView.tag = i * 100 + j // Уникальный тег для идентификации
+                    
+                    gridContainer.addSubview(borderView)
+                    
+                    if isHorizontalNeighbors {
+                        // Вертикальная граница между горизонтальными соседями
+                        borderView.snp.makeConstraints { make in
+                            make.leading.equalTo(tile1.snp.trailing)
+                            make.trailing.equalTo(tile2.snp.leading)
+                            make.top.equalTo(tile1.snp.top)
+                            make.bottom.equalTo(tile1.snp.bottom)
+                        }
+                    } else {
+                        // Горизонтальная граница между вертикальными соседями
+                        borderView.snp.makeConstraints { make in
+                            make.top.equalTo(tile1.snp.bottom)
+                            make.bottom.equalTo(tile2.snp.top)
+                            make.leading.equalTo(tile1.snp.leading)
+                            make.trailing.equalTo(tile1.snp.trailing)
+                        }
+                    }
+                    
+                    borderViews.append(borderView)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Text Layers
+    
+    private func addTextLayer() {
+        // Размещаем текстовый слой в центре квадратной области
+        let centerX = collageView.bounds.width / 2 - 100
+        let centerY = collageView.bounds.height / 2 - 25
+        
+        let textLayer = TextLayerView(frame: CGRect(x: centerX, y: centerY, width: 200, height: 50))
+        textLayer.onDelete = { [weak self] in
+            self?.removeTextLayer(textLayer)
+        }
+        textLayer.onTap = { [weak self] in
+            self?.selectTextLayer(textLayer)
+        }
+        
+        collageView.addSubview(textLayer)
+        textLayers.append(textLayer)
+        selectTextLayer(textLayer)
+    }
+    
+    private func selectTextLayer(_ textLayer: TextLayerView) {
+        // Снимаем выделение со всех текстовых слоев
+        textLayers.forEach { $0.setSelected(false) }
+        
+        // Выделяем текущий
+        textLayer.setSelected(true)
+        currentTextLayer = textLayer
+        
+        // Показываем панель редактирования
+        showTextEditingPanel(for: textLayer)
+    }
+    
+    private func removeTextLayer(_ textLayer: TextLayerView) {
+        textLayer.removeFromSuperview()
+        if let index = textLayers.firstIndex(of: textLayer) {
+            textLayers.remove(at: index)
+        }
+        if currentTextLayer == textLayer {
+            currentTextLayer = nil
+            hideTextEditingPanel()
+        }
+    }
+    
+    private func showTextEditingPanel(for textLayer: TextLayerView) {
+        hideTextEditingPanel()
+        
+        let panel = TextEditingPanel()
+        panel.delegate = self
+        view.addSubview(panel)
+        panel.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+        
+        panel.show(with: textLayer.archTextView.text)
+        textEditingPanel = panel
+    }
+    
+    private func hideTextEditingPanel() {
+        textEditingPanel?.hide()
+        textEditingPanel = nil
     }
     
     // MARK: - Save Collage
@@ -389,9 +637,58 @@ class CollageEditorViewController: UIViewController {
             borderPath.stroke()
         }
         
+        // Рисуем текстовые слои поверх коллажа
+        for textLayer in textLayers {
+            context.saveGState()
+            
+            // Конвертируем координаты текстового слоя
+            let textFrame = collageView.convert(textLayer.frame, from: textLayer.superview)
+            let scale = finalCollageSize.width / collageView.bounds.width
+            
+            let scaledFrame = CGRect(
+                x: textFrame.origin.x * scale,
+                y: textFrame.origin.y * scale,
+                width: textFrame.width * scale,
+                height: textFrame.height * scale
+            )
+            
+            // Применяем трансформацию текстового слоя
+            context.translateBy(x: scaledFrame.midX, y: scaledFrame.midY)
+            context.concatenate(textLayer.transform)
+            
+            // Рисуем текст
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: textLayer.archTextView.font.withSize(textLayer.archTextView.font.pointSize * scale),
+                .foregroundColor: textLayer.archTextView.textColor
+            ]
+            
+            let text = textLayer.archTextView.text
+            let textSize = text.size(withAttributes: attributes)
+            let textRect = CGRect(
+                x: -textSize.width / 2,
+                y: -textSize.height / 2,
+                width: textSize.width,
+                height: textSize.height
+            )
+            
+            text.draw(in: textRect, withAttributes: attributes)
+            
+            context.restoreGState()
+        }
+        
         if let finalImage = UIGraphicsGetImageFromCurrentImageContext() {
+            // Сохраняем в фотоальбом
             UIImageWriteToSavedPhotosAlbum(finalImage, self, #selector(image(_:didFinishSavingWithError:contextInfo:)), nil)
+            
+            // Сохраняем в галерею приложения
+            let templateName = viewModel.collageTemplate.value?.name ?? "Неизвестный шаблон"
+            let savedCollage = SavedCollage(image: finalImage, templateName: templateName)
+            SavedCollagesManager.shared.saveCollage(savedCollage)
+            
             print("Final collage image saved successfully!")
+            
+            // Показываем уведомление об успешном сохранении
+            showSaveSuccessAlert()
         } else {
             print("Failed to generate final collage image")
         }
@@ -405,30 +702,103 @@ class CollageEditorViewController: UIViewController {
         }
     }
     
+    private func showSaveSuccessAlert() {
+        let alert = UIAlertController(
+            title: "Коллаж сохранен!",
+            message: "Ваш коллаж сохранен в галерею и фотоальбом",
+            preferredStyle: .alert
+        )
+        
+        alert.addAction(UIAlertAction(title: "Перейти в галерею", style: .default) { [weak self] _ in
+            self?.coordinator?.showGallery()
+        })
+        
+        alert.addAction(UIAlertAction(title: "OK", style: .cancel))
+        
+        present(alert, animated: true)
+    }
+    
     // MARK: - Gesture Handlers
     
     @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
-        guard let imageView = gesture.view as? UIImageView else { return }
-        let translation = gesture.translation(in: imageView.superview)
-        imageView.center = CGPoint(x: imageView.center.x + translation.x,
-                                   y: imageView.center.y + translation.y)
-        gesture.setTranslation(.zero, in: imageView.superview)
+        guard let imageView = gesture.view as? UIImageView,
+              let tileView = imageView.superview else { return }
+        
+        let translation = gesture.translation(in: tileView)
+        let newCenter = CGPoint(x: imageView.center.x + translation.x,
+                               y: imageView.center.y + translation.y)
+        
+        // Ограничиваем движение в пределах плитки
+        let constrainedCenter = constrainImageViewCenter(newCenter, 
+                                                        imageView: imageView, 
+                                                        containerView: tileView)
+        
+        imageView.center = constrainedCenter
+        gesture.setTranslation(.zero, in: tileView)
     }
     
     @objc private func handlePinch(_ gesture: UIPinchGestureRecognizer) {
-        guard let imageView = gesture.view as? UIImageView else { return }
-        imageView.transform = imageView.transform.scaledBy(x: gesture.scale, y: gesture.scale)
+        guard let imageView = gesture.view as? UIImageView,
+              let tileView = imageView.superview else { return }
+        
+        let newTransform = imageView.transform.scaledBy(x: gesture.scale, y: gesture.scale)
+        
+        // Проверяем, не станет ли изображение слишком маленьким
+        let minScale: CGFloat = 0.5
+        let maxScale: CGFloat = 3.0
+        
+        // Получаем текущий масштаб
+        let currentScale = sqrt(newTransform.a * newTransform.a + newTransform.c * newTransform.c)
+        
+        if currentScale >= minScale && currentScale <= maxScale {
+            imageView.transform = newTransform
+            
+            // После изменения масштаба корректируем позицию
+            let constrainedCenter = constrainImageViewCenter(imageView.center, 
+                                                            imageView: imageView, 
+                                                            containerView: tileView)
+            imageView.center = constrainedCenter
+        }
+        
         gesture.scale = 1.0
     }
     
     @objc private func handleRotation(_ gesture: UIRotationGestureRecognizer) {
-        guard let imageView = gesture.view as? UIImageView else { return }
+        guard let imageView = gesture.view as? UIImageView,
+              let tileView = imageView.superview else { return }
+        
         imageView.transform = imageView.transform.rotated(by: gesture.rotation)
+        
+        // После поворота корректируем позицию
+        let constrainedCenter = constrainImageViewCenter(imageView.center, 
+                                                        imageView: imageView, 
+                                                        containerView: tileView)
+        imageView.center = constrainedCenter
+        
         gesture.rotation = 0.0
     }
     
-
+    // MARK: - Helper Methods
     
+    private func constrainImageViewCenter(_ center: CGPoint, 
+                                        imageView: UIImageView, 
+                                        containerView: UIView) -> CGPoint {
+        // Получаем размеры изображения с учетом трансформации
+        let imageFrame = imageView.frame
+        let containerBounds = containerView.bounds
+        
+        // Вычисляем минимальные и максимальные позиции центра
+        let minX = imageFrame.width / 2
+        let maxX = containerBounds.width - imageFrame.width / 2
+        let minY = imageFrame.height / 2
+        let maxY = containerBounds.height - imageFrame.height / 2
+        
+        // Ограничиваем позицию центра
+        let constrainedX = max(minX, min(maxX, center.x))
+        let constrainedY = max(minY, min(maxY, center.y))
+        
+        return CGPoint(x: constrainedX, y: constrainedY)
+    }
 }
 // MARK: - UIScrollViewDelegate
 extension CollageEditorViewController: UIScrollViewDelegate {
@@ -451,10 +821,6 @@ extension UIImage {
     }
 }
 
-
-
-
-
 extension UIView {
     /// Captures a snapshot of the view's current appearance.
     func snapshot() -> UIImage? {
@@ -471,5 +837,272 @@ extension Collection {
     /// Returns the element at the specified index if it exists, otherwise nil.
     subscript(safe index: Index) -> Element? {
         return indices.contains(index) ? self[index] : nil
+    }
+}
+
+// MARK: - TextEditingPanelDelegate
+extension CollageEditorViewController: TextEditingPanelDelegate {
+    func textEditingPanel(_ panel: TextEditingPanel, didUpdateText text: String) {
+        currentTextLayer?.updateText(text)
+    }
+    
+    func textEditingPanel(_ panel: TextEditingPanel, didSelectColor color: UIColor) {
+        currentTextLayer?.updateTextColor(color)
+    }
+    
+    func textEditingPanel(_ panel: TextEditingPanel, didSelectFontSize size: CGFloat) {
+        if let currentFont = currentTextLayer?.archTextView.font {
+            currentTextLayer?.updateFont(currentFont.withSize(size))
+        }
+    }
+    
+    func textEditingPanel(_ panel: TextEditingPanel, didSelectFont fontName: String) {
+        currentTextLayer?.updateFontByName(fontName)
+    }
+    
+    func textEditingPanel(_ panel: TextEditingPanel, didChangeArchCurve intensity: CGFloat) {
+        currentTextLayer?.applyArchEffect(intensity: intensity)
+    }
+    
+    func textEditingPanelDidFinish(_ panel: TextEditingPanel) {
+        hideTextEditingPanel()
+        currentTextLayer?.setSelected(false)
+        currentTextLayer = nil
+    }
+}
+
+// MARK: - BorderDragViewDelegate
+extension CollageEditorViewController: BorderDragViewDelegate {
+    func borderDragView(_ view: BorderDragView, didChangeRatio ratio: CGFloat) {
+        guard let gridContainer = collageView.viewWithTag(gridContainerTag),
+              let template = viewModel.collageTemplate.value else { return }
+        
+        // Получаем индексы плиток из тега границы
+        let index1 = view.tag / 100
+        let index2 = view.tag % 100
+        
+        guard let tile1 = gridContainer.viewWithTag(index1),
+              let tile2 = gridContainer.viewWithTag(index2) else { return }
+        
+        let pos1 = template.positions[index1]
+        let pos2 = template.positions[index2]
+        
+        // Определяем направление изменения размера
+        let isHorizontal = pos1.1 == pos2.1
+        
+        // Пересчитываем размеры всей сетки
+        recalculateGridLayout(template: template, 
+                            gridContainer: gridContainer, 
+                            changedIndex1: index1, 
+                            changedIndex2: index2, 
+                            ratio: ratio, 
+                            isHorizontal: isHorizontal)
+        
+        // Плавная анимация изменений
+        UIView.animate(withDuration: 0.1, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState], animations: {
+            gridContainer.layoutIfNeeded()
+        })
+    }
+    
+    private func recalculateGridLayout(template: CollageTemplate, 
+                                     gridContainer: UIView, 
+                                     changedIndex1: Int, 
+                                     changedIndex2: Int, 
+                                     ratio: CGFloat, 
+                                     isHorizontal: Bool) {
+        
+        let outerMargin: CGFloat = 16
+        let innerMargin: CGFloat = 8
+        
+        // Используем текущие размеры вместо пересчета с нуля
+        var columnWidths = currentColumnWidths
+        var rowHeights = currentRowHeights
+        
+        // Если массивы пустые (первый запуск), инициализируем их
+        if columnWidths.isEmpty || rowHeights.isEmpty {
+            let containerSize = gridContainer.bounds.size
+            initializeGridSizes(for: template, containerSize: containerSize)
+            columnWidths = currentColumnWidths
+            rowHeights = currentRowHeights
+        }
+        
+        // Применяем изменения для конкретной пары плиток
+        let pos1 = template.positions[changedIndex1]
+        let pos2 = template.positions[changedIndex2]
+        
+        if isHorizontal {
+            // Изменяем ширину колонок
+            let totalWidth = columnWidths[pos1.0] + columnWidths[pos2.0]
+            columnWidths[pos1.0] = totalWidth * ratio
+            columnWidths[pos2.0] = totalWidth * (1 - ratio)
+        } else {
+            // Изменяем высоту строк
+            let totalHeight = rowHeights[pos1.1] + rowHeights[pos2.1]
+            rowHeights[pos1.1] = totalHeight * ratio
+            rowHeights[pos2.1] = totalHeight * (1 - ratio)
+        }
+        
+        // Проверяем, не превышает ли новый размер сетки максимально допустимый
+        let maxWidth = collageView.bounds.width
+        let maxHeight = collageView.bounds.height
+        
+        let newGridWidth = outerMargin * 2 + columnWidths.reduce(0, +) + innerMargin * CGFloat(columnWidths.count - 1)
+        let newGridHeight = outerMargin * 2 + rowHeights.reduce(0, +) + innerMargin * CGFloat(rowHeights.count - 1)
+        
+        // Если размер превышает максимальный, масштабируем пропорционально
+        if newGridWidth > maxWidth || newGridHeight > maxHeight {
+            let scaleX = maxWidth / newGridWidth
+            let scaleY = maxHeight / newGridHeight
+            let scale = min(scaleX, scaleY)
+            
+            // Применяем масштабирование
+            for i in 0..<columnWidths.count {
+                columnWidths[i] *= scale
+            }
+            for i in 0..<rowHeights.count {
+                rowHeights[i] *= scale
+            }
+        }
+        
+        // Сохраняем обновленные размеры
+        currentColumnWidths = columnWidths
+        currentRowHeights = rowHeights
+        
+        // Обновляем размер gridContainer
+        let finalGridWidth = outerMargin * 2 + columnWidths.reduce(0, +) + innerMargin * CGFloat(columnWidths.count - 1)
+        let finalGridHeight = outerMargin * 2 + rowHeights.reduce(0, +) + innerMargin * CGFloat(rowHeights.count - 1)
+        
+        gridContainer.snp.remakeConstraints { make in
+            make.center.equalToSuperview()
+            make.width.equalTo(finalGridWidth)
+            make.height.equalTo(finalGridHeight)
+        }
+        
+        // Пересоздаем constraints для всех плиток
+        for (index, position) in template.positions.enumerated() {
+            guard let tileView = gridContainer.viewWithTag(index) else { continue }
+            
+            let col = position.0
+            let row = position.1
+            
+            // Вычисляем позицию плитки
+            var x: CGFloat = outerMargin
+            for i in 0..<col {
+                x += columnWidths[i] + innerMargin
+            }
+            
+            var y: CGFloat = outerMargin
+            for i in 0..<row {
+                y += rowHeights[i] + innerMargin
+            }
+            
+            let width = columnWidths[col]
+            let height = rowHeights[row]
+            
+            // Специальная обработка для растянутых плиток
+            var finalWidth = width
+            var finalHeight = height
+            
+            if template.name == "Left Tall, Right Two" && position == (0, 0) {
+                finalHeight = rowHeights[0] + rowHeights[1] + innerMargin
+            } else if template.name == "Right Tall, Left Two" && position == (1, 0) {
+                finalHeight = rowHeights[0] + rowHeights[1] + innerMargin
+            } else if template.name == "Top Long, Bottom Two" && position == (0, 0) {
+                finalWidth = columnWidths[0] + columnWidths[1] + innerMargin
+            } else if template.name == "Bottom Long, Top Two" && position == (0, 1) {
+                finalWidth = columnWidths[0] + columnWidths[1] + innerMargin
+            }
+            
+            // Пересоздаем constraints
+            tileView.snp.remakeConstraints { make in
+                make.left.equalToSuperview().offset(x)
+                make.top.equalToSuperview().offset(y)
+                make.width.equalTo(finalWidth)
+                make.height.equalTo(finalHeight)
+            }
+        }
+        
+        // Обновляем позиции границ
+        updateBorderPositions(template: template, gridContainer: gridContainer)
+    }
+    
+    private func updateBorderPositions(template: CollageTemplate, gridContainer: UIView) {
+        // Обновляем позиции всех границ
+        for borderView in borderViews {
+            let index1 = borderView.tag / 100
+            let index2 = borderView.tag % 100
+            
+            guard let tile1 = gridContainer.viewWithTag(index1),
+                  let tile2 = gridContainer.viewWithTag(index2) else { continue }
+            
+            let pos1 = template.positions[index1]
+            let pos2 = template.positions[index2]
+            
+            let isHorizontalNeighbors = abs(pos1.0 - pos2.0) == 1 && pos1.1 == pos2.1
+            
+            borderView.snp.remakeConstraints { make in
+                if isHorizontalNeighbors {
+                    // Вертикальная граница между горизонтальными соседями
+                    make.leading.equalTo(tile1.snp.trailing)
+                    make.trailing.equalTo(tile2.snp.leading)
+                    make.top.equalTo(tile1.snp.top)
+                    make.bottom.equalTo(tile1.snp.bottom)
+                } else {
+                    // Горизонтальная граница между вертикальными соседями
+                    make.top.equalTo(tile1.snp.bottom)
+                    make.bottom.equalTo(tile2.snp.top)
+                    make.leading.equalTo(tile1.snp.leading)
+                    make.trailing.equalTo(tile1.snp.trailing)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - UIImagePickerControllerDelegate
+extension CollageEditorViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        picker.dismiss(animated: true) { [weak self] in
+            guard let self = self,
+                  let selectedImage = info[.originalImage] as? UIImage,
+                  let indexPath = self.currentIndexPath else { return }
+            
+            // Обновляем изображение в модели
+            self.viewModel.setImage(at: indexPath, image: selectedImage)
+            
+            // Обновляем UI
+            self.updateTileWithNewImage(at: indexPath.item, image: selectedImage)
+            
+            // Сбрасываем текущий индекс
+            self.currentIndexPath = nil
+        }
+    }
+    
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true) { [weak self] in
+            self?.currentIndexPath = nil
+        }
+    }
+    
+    private func updateTileWithNewImage(at index: Int, image: UIImage) {
+        guard let gridContainer = collageView.viewWithTag(gridContainerTag),
+              let tileView = gridContainer.subviews[safe: index] as? UIView,
+              let imageView = tileView.subviews.first as? UIImageView else { return }
+        
+        // Обновляем изображение
+        imageView.image = image
+        imageView.contentMode = .scaleAspectFill
+        
+        // Удаляем кнопку "+" если она есть
+        tileView.subviews.forEach { subview in
+            if let button = subview as? UIButton, button.tag == index {
+                button.removeFromSuperview()
+            }
+        }
+        
+        // Обновляем массив selectedPhotos
+        if index < selectedPhotos.count {
+            selectedPhotos[index] = image
+        }
     }
 }

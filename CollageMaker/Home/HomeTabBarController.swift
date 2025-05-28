@@ -268,4 +268,10 @@ class HomeTabBarController: UIViewController {
     private func observeDataLoading() {
         // Removing subscription to isLoading since it's not needed.
     }
+    
+    // MARK: - Public Methods
+    
+    func selectGalleryTab() {
+        selectTab(index: 0)
+    }
 }

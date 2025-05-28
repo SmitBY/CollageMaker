@@ -18,6 +18,15 @@ class HomeViewController: UIViewController {
     
     // MARK: - UI Elements
     
+    let editorButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("Редактор", for: .normal)
+        button.backgroundColor = .systemBlue
+        button.setTitleColor(.white, for: .normal)
+        button.layer.cornerRadius = 8
+        return button
+    }()
+    
     // Контейнер для фотографий (основная часть экрана)
     let photosContainerView: UIView = {
         let view = UIView()
@@ -114,7 +123,16 @@ class HomeViewController: UIViewController {
         templatesContainerView.addSubview(templatesLabel)
         templatesContainerView.addSubview(templatesCollectionView)
         
+        view.addSubview(editorButton)
+        
         // Настройка constraints
+        editorButton.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(16)
+            make.trailing.equalToSuperview().offset(-16)
+            make.width.equalTo(100)
+            make.height.equalTo(40)
+        }
+        
         // Фотографии занимают основную часть экрана
         photosContainerView.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide)
@@ -165,7 +183,14 @@ class HomeViewController: UIViewController {
     }
     
     private func setupBindings() {
-        // Убираем кнопку создания - теперь переход происходит при выборе шаблона
+        editorButton.rx.tap
+            .subscribe(onNext: { [weak self] in
+                guard let self = self else { return }
+                if let coordinator = self.viewModel.coordinator {
+                    coordinator.showCollageEditor(with: CollageTemplate(id: 0, name: "Пустой", positions: []))
+                }
+            })
+            .disposed(by: disposeBag)
     }
     
     private func loadCollageTemplates() {
@@ -176,15 +201,19 @@ class HomeViewController: UIViewController {
         let photoCount = selectedPhotos.count
         
         if photoCount == 0 {
-            // Показываем все шаблоны если ничего не выбрано
-            collageTemplates = CollageTemplatesManager.shared.templates
+            // Показываем базовые шаблоны если ничего не выбрано
+            collageTemplates = generateBasicTemplates(for: 1) + 
+                              generateBasicTemplates(for: 2) + 
+                              generateBasicTemplates(for: 3) + 
+                              generateBasicTemplates(for: 4)
         } else {
-            // Фильтруем шаблоны по количеству выбранных фотографий
-            collageTemplates = CollageTemplatesManager.shared.templates.filter { template in
-                template.positions.count == photoCount
+            // Показываем шаблоны для текущего количества фото и больше (до 9)
+            collageTemplates = []
+            for count in photoCount...min(photoCount + 5, 9) {
+                collageTemplates.append(contentsOf: generateBasicTemplates(for: count))
             }
             
-            // Если нет подходящих шаблонов, создаем базовые
+            // Если нет шаблонов, создаем базовые
             if collageTemplates.isEmpty {
                 collageTemplates = generateBasicTemplates(for: photoCount)
             }
@@ -252,7 +281,7 @@ class HomeViewController: UIViewController {
         if count == 0 {
             templatesLabel.text = "Примеры коллажей"
         } else {
-            templatesLabel.text = "Шаблоны для \(count) фото"
+            templatesLabel.text = "Шаблоны от \(count) до \(min(count + 5, 9)) фото"
         }
     }
     
@@ -292,7 +321,11 @@ class HomeViewController: UIViewController {
     }
     
     private func openCollageEditor(with template: CollageTemplate) {
-        guard !selectedPhotos.isEmpty else {
+        // Проверяем, достаточно ли выбрано фотографий для шаблона
+        let requiredPhotos = template.positions.count
+        let selectedCount = selectedPhotos.count
+        
+        if selectedCount == 0 {
             // Показываем алерт если фото не выбраны
             let alert = UIAlertController(title: "Выберите фотографии", message: "Пожалуйста, выберите хотя бы одну фотографию для создания коллажа", preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -300,12 +333,20 @@ class HomeViewController: UIViewController {
             return
         }
         
+        // Создаем массив фотографий для редактора
+        var photosForEditor = selectedPhotos
+        
+        // Если выбрано меньше фото чем требует шаблон, добавляем пустые места
+        while photosForEditor.count < requiredPhotos {
+            photosForEditor.append(UIImage()) // Пустое изображение как заглушка
+        }
+        
         // Получаем координатор и открываем редактор коллажа
         var currentParent = self.parent
         while currentParent != nil {
             if let tabBarController = currentParent as? HomeTabBarController,
                let coordinator = tabBarController.coordinator {
-                coordinator.showCollageEditor(with: template, selectedPhotos: selectedPhotos)
+                coordinator.showCollageEditor(with: template, selectedPhotos: photosForEditor)
                 return
             }
             currentParent = currentParent?.parent
@@ -386,6 +427,7 @@ extension HomeViewController: UICollectionViewDataSource, UICollectionViewDelega
 
 class TemplatePreviewCell: UICollectionViewCell {
     private let previewImageView = UIImageView()
+    private let countLabel = UILabel()
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -398,19 +440,37 @@ class TemplatePreviewCell: UICollectionViewCell {
     
     private func setupUI() {
         contentView.addSubview(previewImageView)
+        contentView.addSubview(countLabel)
+        
         previewImageView.contentMode = .scaleAspectFit
         previewImageView.backgroundColor = .lightGray
         previewImageView.layer.cornerRadius = 8
         previewImageView.clipsToBounds = true
         
+        countLabel.font = UIFont.boldSystemFont(ofSize: 10)
+        countLabel.textColor = .white
+        countLabel.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.8)
+        countLabel.textAlignment = .center
+        countLabel.layer.cornerRadius = 8
+        countLabel.clipsToBounds = true
+        
         previewImageView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
+        }
+        
+        countLabel.snp.makeConstraints { make in
+            make.bottom.trailing.equalToSuperview().inset(2)
+            make.width.equalTo(16)
+            make.height.equalTo(16)
         }
     }
     
     func configure(with template: CollageTemplate, selectedPhotos: [UIImage] = []) {
         // Создаем превью шаблона с выбранными фотографиями
         previewImageView.image = generateTemplatePreview(template: template, photos: selectedPhotos)
+        
+        // Показываем количество изображений в шаблоне
+        countLabel.text = "\(template.positions.count)"
     }
     
     private func generateTemplatePreview(template: CollageTemplate, photos: [UIImage] = []) -> UIImage? {
