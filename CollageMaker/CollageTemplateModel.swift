@@ -98,22 +98,48 @@ class SavedCollagesManager {
     }
     
     func deleteCollage(withId id: String) {
-        var savedCollages = getAllCollages()
-        savedCollages.removeAll { $0.id == id }
+        // Сначала получаем метаданные из UserDefaults (без загрузки изображений)
+        guard let collagesData = userDefaults.array(forKey: collagesKey) as? [[String: Any]] else {
+            return
+        }
         
-        // Удаляем изображение из Documents
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let imagePath = documentsPath.appendingPathComponent("\(id).jpg")
-        try? FileManager.default.removeItem(at: imagePath)
+        // Удаляем коллаж из метаданных
+        let updatedCollagesData = collagesData.filter { data in
+            guard let collageId = data["id"] as? String else { return true }
+            return collageId != id
+        }
         
         // Обновляем UserDefaults
-        let collageData = savedCollages.map { collage in
-            [
-                "id": collage.id,
-                "createdDate": collage.createdDate.timeIntervalSince1970,
-                "templateName": collage.templateName
-            ]
+        userDefaults.set(updatedCollagesData, forKey: collagesKey)
+        
+        // Удаляем файл изображения из Documents
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let imagePath = documentsPath.appendingPathComponent("\(id).jpg")
+        
+        do {
+            try FileManager.default.removeItem(at: imagePath)
+            print("Successfully deleted collage file: \(id).jpg")
+        } catch {
+            print("Error deleting collage file: \(error.localizedDescription)")
         }
-        userDefaults.set(collageData, forKey: collagesKey)
+    }
+    
+    // MARK: - Debug Methods
+    
+    /// Проверяет существование файлов для всех сохраненных коллажей
+    func checkFileIntegrity() {
+        guard let collagesData = userDefaults.array(forKey: collagesKey) as? [[String: Any]] else {
+            print("No collages metadata found")
+            return
+        }
+        
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        
+        for data in collagesData {
+            guard let id = data["id"] as? String else { continue }
+            let imagePath = documentsPath.appendingPathComponent("\(id).jpg")
+            let fileExists = FileManager.default.fileExists(atPath: imagePath.path)
+            print("Collage \(id): metadata exists, file exists: \(fileExists)")
+        }
     }
 }

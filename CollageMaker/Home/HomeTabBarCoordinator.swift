@@ -54,7 +54,7 @@ class HomeTabBarCoordinator: Coordinator {
     /// Новый метод для показа PhotoEditorViewController поверх CollageEditorViewController.
     func showPhotoEditor(with image: UIImage) {
         let photoEditorViewModel = PhotoEditorViewModel(image: image)
-        let photoEditorVC = PhotoEditController(viewModel: photoEditorViewModel)
+        let photoEditorVC = PhotoEditorViewController(viewModel: photoEditorViewModel)
         photoEditorVC.modalPresentationStyle = .overFullScreen
         navigationController.present(photoEditorVC, animated: true, completion: nil)
     }

@@ -28,9 +28,13 @@ class TextEditingPanel: UIView {
         view.backgroundColor = .systemBackground
         view.layer.cornerRadius = 16
         view.layer.shadowColor = UIColor.black.cgColor
-        view.layer.shadowOpacity = 0.1
-        view.layer.shadowOffset = CGSize(width: 0, height: -2)
-        view.layer.shadowRadius = 8
+        view.layer.shadowOpacity = 0.2
+        view.layer.shadowOffset = CGSize(width: 0, height: -4)
+        view.layer.shadowRadius = 12
+        
+        view.layer.borderWidth = 1
+        view.layer.borderColor = UIColor.systemGray4.cgColor
+        
         return view
     }()
     
@@ -72,7 +76,16 @@ class TextEditingPanel: UIView {
         button.backgroundColor = .systemGray6
         button.layer.cornerRadius = 8
         button.contentHorizontalAlignment = .left
-        button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        
+        // Используем современный UIButton.Configuration вместо deprecated contentEdgeInsets
+        var config = UIButton.Configuration.plain()
+        config.title = "Шрифт: Системный"
+        config.baseBackgroundColor = .systemGray6
+        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12)
+        config.cornerStyle = .medium
+        config.titleAlignment = .leading
+        button.configuration = config
+        
         return button
     }()
     
@@ -113,6 +126,13 @@ class TextEditingPanel: UIView {
         button.backgroundColor = .systemBlue
         button.setTitleColor(.white, for: .normal)
         button.layer.cornerRadius = 8
+        
+        // Добавляем тень для лучшей видимости
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOffset = CGSize(width: 0, height: 2)
+        button.layer.shadowOpacity = 0.3
+        button.layer.shadowRadius = 4
+        
         return button
     }()
     
@@ -151,7 +171,7 @@ class TextEditingPanel: UIView {
         // Constraints
         containerView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview().inset(20)
-            make.bottom.equalTo(safeAreaLayoutGuide).offset(-20)
+            make.bottom.equalToSuperview().offset(-20)
         }
         
         textField.snp.makeConstraints { make in

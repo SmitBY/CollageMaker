@@ -36,9 +36,13 @@ class GalleryViewModel {
     
     func deleteCollage(at index: Int) {
         let currentCollages = savedCollages.value
-        guard index < currentCollages.count else { return }
+        guard index < currentCollages.count else { 
+            print("Error: Index \(index) out of bounds for collages array")
+            return 
+        }
         
         let collageToDelete = currentCollages[index]
+        print("Deleting collage with ID: \(collageToDelete.id)")
         SavedCollagesManager.shared.deleteCollage(withId: collageToDelete.id)
         
         // Обновляем список
@@ -46,6 +50,7 @@ class GalleryViewModel {
     }
     
     func deleteCollage(withId id: String) {
+        print("Deleting collage with ID: \(id)")
         SavedCollagesManager.shared.deleteCollage(withId: id)
         loadSavedCollages()
     }
