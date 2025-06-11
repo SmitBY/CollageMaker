@@ -61,9 +61,15 @@ class HomeTabBarCoordinator: Coordinator {
     
     /// Переключает на вкладку галереи
     func showGallery() {
+        // Сначала возвращаемся к root контроллеру (HomeTabBarController)
+        navigationController.popToRootViewController(animated: true)
+        
+        // Затем переключаемся на вкладку галереи
         if let homeTabBarController = navigationController.viewControllers.first as? HomeTabBarController {
-            // Переключаемся на вкладку галереи (индекс 0)
-            homeTabBarController.selectGalleryTab()
+            // Делаем это с небольшой задержкой, чтобы анимация pop завершилась
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                homeTabBarController.selectGalleryTab()
+            }
         }
     }
 }

@@ -108,7 +108,7 @@ class PhotoEditorViewController: UIViewController {
         print("photoContainerView bounds: \(photoContainerView.bounds)")
         
         // Обновляем cropOverlayView.cropRect
-        if let image = imageView.image {
+        if imageView.image != nil {
             let cropRect = photoContainerView.convert(cropGridView.frame, to: imageView)
             cropOverlayView.cropRect = cropRect
         }

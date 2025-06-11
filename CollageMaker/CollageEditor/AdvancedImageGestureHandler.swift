@@ -90,7 +90,7 @@ class AdvancedImageGestureHandler: NSObject {
     }
     
     private func showSelectionOverlay() {
-        guard let imageView = imageView, let containerView = containerView else { return }
+        guard let _ = imageView, let containerView = containerView else { return }
         
         hideSelectionOverlay()
         
@@ -137,17 +137,18 @@ class AdvancedImageGestureHandler: NSObject {
         let frame = imageView.frame
         let expandedFrame = frame.insetBy(dx: -10, dy: -10)
         
-        // Ограничиваем overlay границами containerView
+        // Ограничиваем overlay границами containerView с учетом трансформации
         let containerBounds = containerView.bounds
         let constrainedFrame = CGRect(
-            x: max(containerBounds.minX, min(containerBounds.maxX - expandedFrame.width, expandedFrame.origin.x)),
-            y: max(containerBounds.minY, min(containerBounds.maxY - expandedFrame.height, expandedFrame.origin.y)),
+            x: max(containerBounds.minX, min(containerBounds.maxX - max(expandedFrame.width, 50), expandedFrame.origin.x)),
+            y: max(containerBounds.minY, min(containerBounds.maxY - max(expandedFrame.height, 50), expandedFrame.origin.y)),
             width: min(expandedFrame.width, containerBounds.width),
             height: min(expandedFrame.height, containerBounds.height)
         )
         
         overlay.frame = constrainedFrame
-        overlay.transform = imageView.transform
+        // Не применяем transform к overlay - это может вызывать проблемы
+        // overlay.transform = imageView.transform
         
         // Обновляем позиции ручек после изменения фрейма
         updateHandlePositions()
@@ -303,7 +304,15 @@ class AdvancedImageGestureHandler: NSObject {
                 x: initialFrame.midX + translation.x,
                 y: initialFrame.midY + translation.y
             )
-            imageView.center = constrainPoint(newCenter, in: imageView.superview?.bounds ?? .zero)
+            
+            // Проверяем границы перед применением
+            if let containerBounds = imageView.superview?.bounds {
+                let constrainedCenter = constrainPoint(newCenter, in: containerBounds)
+                imageView.center = constrainedCenter
+            } else {
+                imageView.center = newCenter
+            }
+            
             updateOverlayFrame()
         case .ended, .cancelled:
             editingMode = .none
@@ -322,8 +331,17 @@ class AdvancedImageGestureHandler: NSObject {
             initialTransform = imageView.transform
         case .changed:
             let scale = gesture.scale
-            imageView.transform = initialTransform.scaledBy(x: scale, y: scale)
-            updateOverlayFrame()
+            let newTransform = initialTransform.scaledBy(x: scale, y: scale)
+            
+            // Ограничиваем масштаб
+            let currentScale = sqrt(newTransform.a * newTransform.a + newTransform.c * newTransform.c)
+            let minScale: CGFloat = 0.1
+            let maxScale: CGFloat = 5.0
+            
+            if currentScale >= minScale && currentScale <= maxScale {
+                imageView.transform = newTransform
+                updateOverlayFrame()
+            }
         case .ended, .cancelled:
             editingMode = .none
             delegate?.gestureHandler(self, didUpdateTransform: imageView.transform, for: imageView)
@@ -341,7 +359,8 @@ class AdvancedImageGestureHandler: NSObject {
             initialTransform = imageView.transform
         case .changed:
             let rotation = gesture.rotation
-            imageView.transform = initialTransform.rotated(by: rotation)
+            let newTransform = initialTransform.rotated(by: rotation)
+            imageView.transform = newTransform
             updateOverlayFrame()
         case .ended, .cancelled:
             editingMode = .none
@@ -365,7 +384,15 @@ class AdvancedImageGestureHandler: NSObject {
                 x: initialFrame.midX + translation.x,
                 y: initialFrame.midY + translation.y
             )
-            imageView.center = constrainPoint(newCenter, in: imageView.superview?.bounds ?? .zero)
+            
+            // Проверяем границы перед применением
+            if let containerBounds = imageView.superview?.bounds {
+                let constrainedCenter = constrainPoint(newCenter, in: containerBounds)
+                imageView.center = constrainedCenter
+            } else {
+                imageView.center = newCenter
+            }
+            
             updateOverlayFrame()
         case .ended, .cancelled:
             editingMode = .none
@@ -478,10 +505,40 @@ class AdvancedImageGestureHandler: NSObject {
     }
     
     private func constrainPoint(_ point: CGPoint, in bounds: CGRect) -> CGPoint {
+        guard !bounds.isEmpty else { return point }
+        
+        let margin: CGFloat = 50
         return CGPoint(
-            x: max(bounds.minX + 25, min(bounds.maxX - 25, point.x)),
-            y: max(bounds.minY + 25, min(bounds.maxY - 25, point.y))
+            x: max(bounds.minX + margin, min(bounds.maxX - margin, point.x)),
+            y: max(bounds.minY + margin, min(bounds.maxY - margin, point.y))
         )
+    }
+    
+    // MARK: - Public Methods
+    
+    /// Сбрасывает трансформацию изображения если оно вышло за границы
+    func resetTransformIfNeeded() {
+        guard let imageView = imageView, let containerView = containerView else { return }
+        
+        let imageFrame = imageView.frame
+        let containerBounds = containerView.bounds.insetBy(dx: 20, dy: 20)
+        
+        // Проверяем, не вышло ли изображение полностью за границы
+        if !imageFrame.intersects(containerBounds) {
+            print("Изображение вышло за границы, сбрасываем трансформацию")
+            
+            // Сбрасываем трансформацию
+            imageView.transform = .identity
+            
+            // Возвращаем в центр контейнера
+            imageView.center = CGPoint(x: containerBounds.midX, y: containerBounds.midY)
+            
+            // Обновляем overlay
+            updateOverlayFrame()
+            
+            // Уведомляем делегата
+            delegate?.gestureHandler(self, didUpdateFrame: imageView.frame, for: imageView)
+        }
     }
 }
 

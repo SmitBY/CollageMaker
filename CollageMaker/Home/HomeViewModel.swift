@@ -16,7 +16,7 @@ class HomeViewModel {
     let title = BehaviorRelay<String>(value: "Home Screen")
     
     /// Relay for the index of the selected cell.
-    let selectedIndex = PublishRelay<Int>()
+        let selectedIndex = PublishRelay<Int>()
     
     /// BehaviorRelay holding an array of collage templates.
     let collageTemplates = BehaviorRelay<[CollageTemplate]>(value: [])

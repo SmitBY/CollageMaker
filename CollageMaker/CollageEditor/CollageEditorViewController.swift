@@ -29,6 +29,43 @@ class CollageEditorViewController: UIViewController {
     private let saveButton = UIButton(type: .system)
     private let addTextButton = UIButton(type: .system)
     
+    // Контейнер для ползунков
+    private let slidersContainerView = UIView()
+    
+    // Ползунок для закругления углов
+    private let cornerRadiusSlider: UISlider = {
+        let slider = UISlider()
+        slider.minimumValue = 0
+        slider.maximumValue = 20
+        slider.value = 4
+        return slider
+    }()
+    
+    private let cornerRadiusLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Закругление: 4"
+        label.font = UIFont.systemFont(ofSize: 14)
+        label.textAlignment = .center
+        return label
+    }()
+    
+    // Ползунок для расстояния между фотографиями
+    private let spacingSlider: UISlider = {
+        let slider = UISlider()
+        slider.minimumValue = 0
+        slider.maximumValue = 16
+        slider.value = 8
+        return slider
+    }()
+    
+    private let spacingLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Расстояние: 8"
+        label.font = UIFont.systemFont(ofSize: 14)
+        label.textAlignment = .center
+        return label
+    }()
+    
     // Данные для коллажа
     private var selectedPhotos: [UIImage] = [] // Выбранные пользователем фотографии
     private var textLayers: [TextLayerView] = [] // Текстовые слои
@@ -39,6 +76,7 @@ class CollageEditorViewController: UIViewController {
     // Сохраняем текущие размеры сетки
     private var currentColumnWidths: [CGFloat] = []
     private var currentRowHeights: [CGFloat] = []
+    private var currentInnerMargin: CGFloat = 8
     
     /// Stores the currently selected image's index path (for image picker usage)
     private var currentIndexPath: IndexPath?
@@ -105,16 +143,62 @@ class CollageEditorViewController: UIViewController {
         collageView.layer.cornerRadius = 12
         collageView.clipsToBounds = true
         
+        // Настройка контейнера для ползунков
+        slidersContainerView.backgroundColor = .systemBackground
+        slidersContainerView.layer.cornerRadius = 8
+        slidersContainerView.layer.borderWidth = 1
+        slidersContainerView.layer.borderColor = UIColor.systemGray4.cgColor
+        
         // Добавляем элементы на view
         view.addSubview(collageView)
+        view.addSubview(slidersContainerView)
         view.addSubview(saveButton)
         view.addSubview(addTextButton)
+        
+        // Добавляем ползунки в контейнер
+        slidersContainerView.addSubview(cornerRadiusLabel)
+        slidersContainerView.addSubview(cornerRadiusSlider)
+        slidersContainerView.addSubview(spacingLabel)
+        slidersContainerView.addSubview(spacingSlider)
         
         // Настройка constraints
         collageView.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide).offset(20)
             make.leading.trailing.equalToSuperview().inset(20)
-            make.bottom.equalTo(saveButton.snp.top).offset(-20)
+            make.bottom.equalTo(slidersContainerView.snp.top).offset(-10)
+        }
+        
+        slidersContainerView.snp.makeConstraints { make in
+            make.leading.trailing.equalToSuperview().inset(20)
+            make.bottom.equalTo(saveButton.snp.top).offset(-10)
+            make.height.equalTo(120)
+        }
+        
+        // Constraints для ползунков внутри контейнера (вертикальное расположение)
+        cornerRadiusLabel.snp.makeConstraints { make in
+            make.top.equalToSuperview().offset(12)
+            make.leading.equalToSuperview().offset(16)
+            make.width.equalTo(120)
+        }
+        
+        cornerRadiusSlider.snp.makeConstraints { make in
+            make.centerY.equalTo(cornerRadiusLabel)
+            make.leading.equalTo(cornerRadiusLabel.snp.trailing).offset(12)
+            make.trailing.equalToSuperview().offset(-16)
+            make.height.equalTo(30)
+        }
+        
+        spacingLabel.snp.makeConstraints { make in
+            make.top.equalTo(cornerRadiusLabel.snp.bottom).offset(20)
+            make.leading.equalToSuperview().offset(16)
+            make.width.equalTo(120)
+        }
+        
+        spacingSlider.snp.makeConstraints { make in
+            make.centerY.equalTo(spacingLabel)
+            make.leading.equalTo(spacingLabel.snp.trailing).offset(12)
+            make.trailing.equalToSuperview().offset(-16)
+            make.height.equalTo(30)
         }
         
         saveButton.snp.makeConstraints { make in
@@ -125,17 +209,21 @@ class CollageEditorViewController: UIViewController {
         
         addTextButton.snp.makeConstraints { make in
             make.trailing.equalToSuperview().inset(20)
-            make.bottom.equalTo(saveButton.snp.top).offset(-10)
+            make.bottom.equalTo(slidersContainerView.snp.top).offset(-10)
             make.width.equalTo(80)
             make.height.equalTo(40)
         }
         
         // Убеждаемся, что кнопки всегда поверх других элементов
         ensureButtonsOnTop()
+        
+        // Добавляем жест для снятия выделения при тапе на пустое место
+        setupCollageViewTapGesture()
     }
     
     private func ensureButtonsOnTop() {
-        // Перемещаем кнопки на передний план
+        // Перемещаем элементы управления на передний план
+        view.bringSubviewToFront(slidersContainerView)
         view.bringSubviewToFront(saveButton)
         view.bringSubviewToFront(addTextButton)
         
@@ -149,6 +237,11 @@ class CollageEditorViewController: UIViewController {
         addTextButton.layer.shadowOffset = CGSize(width: 0, height: 2)
         addTextButton.layer.shadowOpacity = 0.3
         addTextButton.layer.shadowRadius = 4
+        
+        slidersContainerView.layer.shadowColor = UIColor.black.cgColor
+        slidersContainerView.layer.shadowOffset = CGSize(width: 0, height: 2)
+        slidersContainerView.layer.shadowOpacity = 0.1
+        slidersContainerView.layer.shadowRadius = 4
     }
     
     private func setupSquareEditingArea() {
@@ -393,6 +486,22 @@ class CollageEditorViewController: UIViewController {
                 self?.addTextLayer()
             })
             .disposed(by: disposeBag)
+        
+        // Обработка изменений ползунка закругления углов
+        cornerRadiusSlider.rx.value
+            .skip(1) // Пропускаем начальное значение
+            .subscribe(onNext: { [weak self] value in
+                self?.updateCornerRadius(CGFloat(value))
+            })
+            .disposed(by: disposeBag)
+        
+        // Обработка изменений ползунка расстояния
+        spacingSlider.rx.value
+            .skip(1) // Пропускаем начальное значение
+            .subscribe(onNext: { [weak self] value in
+                self?.updateSpacing(CGFloat(value))
+            })
+            .disposed(by: disposeBag)
     }
     
     // MARK: - Grid Size Management
@@ -497,6 +606,10 @@ class CollageEditorViewController: UIViewController {
         // Снимаем выделение со всех текстовых слоев
         textLayers.forEach { $0.setSelected(false) }
         
+        // Снимаем выделение с изображений
+        gestureHandlers.forEach { $0.setSelected(false) }
+        selectedImageView = nil
+        
         // Выделяем текущий
         textLayer.setSelected(true)
         currentTextLayer = textLayer
@@ -522,6 +635,51 @@ class CollageEditorViewController: UIViewController {
         ensureButtonsOnTop()
     }
     
+    /// Снимает выделение со всех текстовых слоев
+    private func deselectAllTextLayers() {
+        textLayers.forEach { $0.setSelected(false) }
+        currentTextLayer = nil
+        hideTextEditingPanel()
+    }
+    
+    /// Добавляет жест для снятия выделения при тапе на пустое место
+    private func setupCollageViewTapGesture() {
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(collageViewTapped(_:)))
+        tapGesture.cancelsTouchesInView = false
+        collageView.addGestureRecognizer(tapGesture)
+    }
+    
+    @objc private func collageViewTapped(_ gesture: UITapGestureRecognizer) {
+        let location = gesture.location(in: collageView)
+        
+        // Проверяем, не попали ли в какой-то текстовый слой
+        var hitTextLayer = false
+        for textLayer in textLayers {
+            if textLayer.frame.contains(location) {
+                hitTextLayer = true
+                break
+            }
+        }
+        
+        // Проверяем, не попали ли в изображение
+        guard let gridContainer = collageView.viewWithTag(gridContainerTag) else { return }
+        let locationInGrid = collageView.convert(location, to: gridContainer)
+        var hitImage = false
+        for subview in gridContainer.subviews {
+            if subview.frame.contains(locationInGrid) && subview.tag < 1000 {
+                hitImage = true
+                break
+            }
+        }
+        
+        // Если не попали ни в текст, ни в изображение, снимаем все выделения
+        if !hitTextLayer && !hitImage {
+            deselectAllTextLayers()
+            gestureHandlers.forEach { $0.setSelected(false) }
+            selectedImageView = nil
+        }
+    }
+    
     private func showTextEditingPanel(for textLayer: TextLayerView) {
         hideTextEditingPanel()
         
@@ -529,10 +687,9 @@ class CollageEditorViewController: UIViewController {
         panel.delegate = self
         view.addSubview(panel)
         
-        // Позиционируем панель так, чтобы она не перекрывала кнопку сохранения
+        // Панель занимает весь экран для правильного позиционирования относительно клавиатуры
         panel.snp.makeConstraints { make in
-            make.top.leading.trailing.equalToSuperview()
-            make.bottom.equalTo(saveButton.snp.top).offset(-10) // Оставляем место для кнопки сохранения
+            make.edges.equalToSuperview()
         }
         
         panel.show(with: textLayer.archTextView.text)
@@ -586,6 +743,9 @@ class CollageEditorViewController: UIViewController {
         let offsetX = (finalCollageSize.width - currentGridSize.width * scale) / 2
         let offsetY = (finalCollageSize.height - currentGridSize.height * scale) / 2
         
+        // Получаем текущее значение закругления углов
+        let currentCornerRadius = CGFloat(cornerRadiusSlider.value)
+        
         // Для каждого элемента шаблона.
         for (index, _) in template.positions.enumerated() {
             // Получаем текущую плитку из UI
@@ -613,8 +773,8 @@ class CollageEditorViewController: UIViewController {
             // Сохраняем состояние контекста
             context.saveGState()
             
-            // Создаем clipping path с округлением
-            let roundedPath = UIBezierPath(roundedRect: scaledTileFrame, cornerRadius: 8 * scale)
+            // Создаем clipping path с текущим закруглением
+            let roundedPath = UIBezierPath(roundedRect: scaledTileFrame, cornerRadius: currentCornerRadius * scale)
             roundedPath.addClip()
             
             // Перемещаем контекст в центр плитки
@@ -653,8 +813,8 @@ class CollageEditorViewController: UIViewController {
             // Восстанавливаем состояние контекста
             context.restoreGState()
             
-            // Рисуем белую рамку поверх
-            let borderPath = UIBezierPath(roundedRect: scaledTileFrame, cornerRadius: 8 * scale)
+            // Рисуем белую рамку поверх с текущим закруглением
+            let borderPath = UIBezierPath(roundedRect: scaledTileFrame, cornerRadius: currentCornerRadius * scale)
             UIColor.white.setStroke()
             borderPath.lineWidth = 2.0 * scale
             borderPath.stroke()
@@ -663,52 +823,32 @@ class CollageEditorViewController: UIViewController {
         // Рисуем текстовые слои поверх коллажа
         for textLayer in textLayers {
             context.saveGState()
-            
-            // Конвертируем координаты текстового слоя относительно collageView
-            let textFrameInCollageView = textLayer.frame
-            
-            // Вычисляем позицию текста в gridContainer
-            let textFrameInGrid = CGRect(
-                x: textFrameInCollageView.origin.x - gridContainer.frame.origin.x,
-                y: textFrameInCollageView.origin.y - gridContainer.frame.origin.y,
-                width: textFrameInCollageView.width,
-                height: textFrameInCollageView.height
+
+            // 1. Вычисляем центр слоя в координатах финального изображения
+            let centerInGrid = collageView.convert(textLayer.center, to: gridContainer)
+            let scaledCenter = CGPoint(
+                x: centerInGrid.x * scale + offsetX,
+                y: centerInGrid.y * scale + offsetY
             )
             
-            // Масштабируем для финального изображения
-            let scaledTextFrame = CGRect(
-                x: textFrameInGrid.origin.x * scale + offsetX,
-                y: textFrameInGrid.origin.y * scale + offsetY,
-                width: textFrameInGrid.width * scale,
-                height: textFrameInGrid.height * scale
-            )
+            // 2. Перемещаем контекст в этот центр
+            context.translateBy(x: scaledCenter.x, y: scaledCenter.y)
+
+            // 3. Применяем трансформацию слоя, отмасштабированную на общий масштаб коллажа
+            let finalTransform = textLayer.transform.scaledBy(x: scale, y: scale)
+            context.concatenate(finalTransform)
             
-            // Применяем трансформацию текстового слоя
-            context.translateBy(x: scaledTextFrame.midX, y: scaledTextFrame.midY)
-            
-            // Применяем только поворот и отражение, без масштабирования размера
-            var textTransform = textLayer.transform
-            // Убираем масштабирование из трансформации, оставляем только поворот
-            let scaleX = sqrt(textTransform.a * textTransform.a + textTransform.c * textTransform.c)
-            let scaleY = sqrt(textTransform.b * textTransform.b + textTransform.d * textTransform.d)
-            textTransform.a /= scaleX
-            textTransform.b /= scaleY
-            textTransform.c /= scaleX
-            textTransform.d /= scaleY
-            context.concatenate(textTransform)
-            
-            // Рисуем текст с правильным размером шрифта
-            // Используем исходный размер шрифта, умноженный только на общий масштаб
-            let originalFontSize = textLayer.archTextView.font.pointSize
-            let scaledFontSize = originalFontSize * scale
-            
+            // 4. Рисуем текст с оригинальными атрибутами.
+            // Трансформация контекста позаботится о масштабе и повороте.
             let attributes: [NSAttributedString.Key: Any] = [
-                .font: textLayer.archTextView.font.withSize(scaledFontSize),
+                .font: textLayer.archTextView.font,
                 .foregroundColor: textLayer.archTextView.textColor
             ]
             
             let text = textLayer.archTextView.text
             let textSize = text.size(withAttributes: attributes)
+            
+            // Рисуем текст, центрируя его относительно текущей точки (которая является центром слоя)
             let textRect = CGRect(
                 x: -textSize.width / 2,
                 y: -textSize.height / 2,
@@ -761,6 +901,118 @@ class CollageEditorViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "OK", style: .cancel))
         
         present(alert, animated: true)
+    }
+    
+    // MARK: - Slider Methods
+    
+    private func updateCornerRadius(_ radius: CGFloat) {
+        // Обновляем лейбл
+        cornerRadiusLabel.text = "Закругление: \(Int(radius))"
+        
+        // Применяем закругление ко всем плиткам
+        guard let gridContainer = collageView.viewWithTag(gridContainerTag) else { return }
+        
+        for subview in gridContainer.subviews {
+            if subview.tag < 1000 { // Только плитки, не служебные view
+                subview.layer.cornerRadius = radius
+            }
+        }
+    }
+    
+    private func updateSpacing(_ spacing: CGFloat) {
+        // Обновляем лейбл
+        spacingLabel.text = "Расстояние: \(Int(spacing))"
+        
+        // Сохраняем новое значение расстояния
+        currentInnerMargin = spacing
+        
+        // Перестраиваем layout коллажа с новым расстоянием
+        if let template = viewModel.collageTemplate.value {
+            rebuildCollageLayout(with: template, newInnerMargin: spacing)
+        }
+    }
+    
+    private func rebuildCollageLayout(with template: CollageTemplate, newInnerMargin: CGFloat) {
+        guard let gridContainer = collageView.viewWithTag(gridContainerTag) else { return }
+        
+        let outerMargin: CGFloat = 16
+        
+        // Определяем размеры сетки
+        let specialTemplates = ["Left Tall, Right Two", "Right Tall, Left Two", "Top Long, Bottom Two", "Bottom Long, Top Two"]
+        let columns: Int
+        let rows: Int
+        if specialTemplates.contains(template.name) {
+            columns = 2
+            rows = 2
+        } else {
+            columns = (template.positions.map { $0.0 }.max() ?? 0) + 1
+            rows = (template.positions.map { $0.1 }.max() ?? 0) + 1
+        }
+        
+        // Получаем размер collageView
+        let containerWidth = collageView.bounds.width > 0 ? collageView.bounds.width : 200
+        let containerHeight = collageView.bounds.height > 0 ? collageView.bounds.height : 200
+        
+        // Определяем размер квадратной области
+        let maxAvailableSize = min(containerWidth, containerHeight) - 2 * outerMargin
+        
+        // Вычисляем размер стандартной плитки с новым расстоянием
+        let totalHorizontalSpacing = newInnerMargin * CGFloat(columns - 1)
+        let totalVerticalSpacing = newInnerMargin * CGFloat(rows - 1)
+        let tileSide = min((maxAvailableSize - totalHorizontalSpacing) / CGFloat(columns),
+                           (maxAvailableSize - totalVerticalSpacing) / CGFloat(rows))
+        
+        // Размер всей сетки
+        let gridContentWidth = CGFloat(columns) * tileSide + totalHorizontalSpacing
+        let gridContentHeight = CGFloat(rows) * tileSide + totalVerticalSpacing
+        let gridSize = max(gridContentWidth, gridContentHeight) + 2 * outerMargin
+        
+        // Обновляем размер gridContainer
+        gridContainer.snp.updateConstraints { make in
+            make.width.height.equalTo(gridSize)
+        }
+        
+        // Вычисляем смещения для центрирования содержимого в квадрате
+        let contentOffsetX = (gridSize - gridContentWidth) / 2
+        let contentOffsetY = (gridSize - gridContentHeight) / 2
+        
+        // Обновляем позиции всех плиток
+        for (index, position) in template.positions.enumerated() {
+            guard let tileView = gridContainer.subviews[safe: index] else { continue }
+            
+            let col = CGFloat(position.0)
+            let row = CGFloat(position.1)
+            
+            // Начальный расчет
+            var tileFrame = CGRect(x: contentOffsetX + col * (tileSide + newInnerMargin),
+                                   y: contentOffsetY + row * (tileSide + newInnerMargin),
+                                   width: tileSide,
+                                   height: tileSide)
+            
+            // Специальная обработка для шаблонов
+            if template.name == "Left Tall, Right Two" && position == (0, 0) {
+                tileFrame.size.height = tileSide * 2 + newInnerMargin
+            } else if template.name == "Right Tall, Left Two" && position == (1, 0) {
+                tileFrame.size.height = tileSide * 2 + newInnerMargin
+            } else if template.name == "Top Long, Bottom Two" && position == (0, 0) {
+                tileFrame.size.width = tileSide * 2 + newInnerMargin
+            } else if template.name == "Bottom Long, Top Two" && position == (0, 1) {
+                tileFrame.size.width = tileSide * 2 + newInnerMargin
+            }
+            
+            // Обновляем constraints плитки
+            tileView.snp.remakeConstraints { make in
+                make.left.equalToSuperview().offset(tileFrame.origin.x)
+                make.top.equalToSuperview().offset(tileFrame.origin.y)
+                make.width.equalTo(tileFrame.size.width)
+                make.height.equalTo(tileFrame.size.height)
+            }
+        }
+        
+        // Анимируем изменения
+        UIView.animate(withDuration: 0.3) {
+            self.view.layoutIfNeeded()
+        }
     }
     
     // MARK: - Helper Methods
@@ -866,9 +1118,7 @@ extension CollageEditorViewController: TextEditingPanelDelegate {
         currentTextLayer?.updateFontByName(fontName)
     }
     
-    func textEditingPanel(_ panel: TextEditingPanel, didChangeArchCurve intensity: CGFloat) {
-        currentTextLayer?.applyArchEffect(intensity: intensity)
-    }
+
     
     func textEditingPanelDidFinish(_ panel: TextEditingPanel) {
         hideTextEditingPanel()
@@ -1136,6 +1386,9 @@ extension CollageEditorViewController: AdvancedImageGestureHandlerDelegate {
         // Сохраняем трансформацию изображения
         imageView.transform = transform
         
+        // Проверяем, не вышло ли изображение за границы
+        handler.resetTransformIfNeeded()
+        
         // Ограничиваем изображение в пределах квадратной области
         constrainImageViewToEditingArea(imageView)
         
@@ -1146,6 +1399,9 @@ extension CollageEditorViewController: AdvancedImageGestureHandlerDelegate {
     func gestureHandler(_ handler: AdvancedImageGestureHandler, didUpdateFrame frame: CGRect, for imageView: UIImageView) {
         // Сохраняем новый фрейм изображения
         imageView.frame = frame
+        
+        // Проверяем, не вышло ли изображение за границы
+        handler.resetTransformIfNeeded()
         
         // Ограничиваем изображение в пределах квадратной области
         constrainImageViewToEditingArea(imageView)

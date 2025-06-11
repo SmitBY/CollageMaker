@@ -9,6 +9,7 @@ import Foundation
 import RxSwift
 import RxCocoa
 import UIKit
+import Photos
 
 class GalleryViewModel {
     let title = BehaviorRelay<String>(value: "Галерея")
@@ -43,6 +44,28 @@ class GalleryViewModel {
         
         let collageToDelete = currentCollages[index]
         print("Deleting collage with ID: \(collageToDelete.id)")
+        
+        // Удаляем из галереи устройства
+        PHPhotoLibrary.shared().performChanges({
+            // Получаем все фотографии из галереи
+            let fetchOptions = PHFetchOptions()
+            fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+            let assets = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+            
+            // Ищем фотографию, которая соответствует нашему коллажу
+            assets.enumerateObjects { asset, _, _ in
+                if let creationDate = asset.creationDate,
+                   abs(creationDate.timeIntervalSince(collageToDelete.createdDate)) < 1.0 { // Разница в 1 секунду
+                    PHAssetChangeRequest.deleteAssets([asset] as NSArray)
+                }
+            }
+        }) { success, error in
+            if let error = error {
+                print("Error deleting from photo library: \(error.localizedDescription)")
+            }
+        }
+        
+        // Удаляем из локального хранилища
         SavedCollagesManager.shared.deleteCollage(withId: collageToDelete.id)
         
         // Обновляем список

@@ -18,15 +18,6 @@ class HomeViewController: UIViewController {
     
     // MARK: - UI Elements
     
-    let editorButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.setTitle("Редактор", for: .normal)
-        button.backgroundColor = .systemBlue
-        button.setTitleColor(.white, for: .normal)
-        button.layer.cornerRadius = 8
-        return button
-    }()
-    
     // Контейнер для фотографий (основная часть экрана)
     let photosContainerView: UIView = {
         let view = UIView()
@@ -123,15 +114,7 @@ class HomeViewController: UIViewController {
         templatesContainerView.addSubview(templatesLabel)
         templatesContainerView.addSubview(templatesCollectionView)
         
-        view.addSubview(editorButton)
-        
         // Настройка constraints
-        editorButton.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide).offset(16)
-            make.trailing.equalToSuperview().offset(-16)
-            make.width.equalTo(100)
-            make.height.equalTo(40)
-        }
         
         // Фотографии занимают основную часть экрана
         photosContainerView.snp.makeConstraints { make in
@@ -183,14 +166,7 @@ class HomeViewController: UIViewController {
     }
     
     private func setupBindings() {
-        editorButton.rx.tap
-            .subscribe(onNext: { [weak self] in
-                guard let self = self else { return }
-                if let coordinator = self.viewModel.coordinator {
-                    coordinator.showCollageEditor(with: CollageTemplate(id: 0, name: "Пустой", positions: []))
-                }
-            })
-            .disposed(by: disposeBag)
+        // Пока нет других bindings
     }
     
     private func loadCollageTemplates() {
@@ -321,22 +297,11 @@ class HomeViewController: UIViewController {
     }
     
     private func openCollageEditor(with template: CollageTemplate) {
-        // Проверяем, достаточно ли выбрано фотографий для шаблона
-        let requiredPhotos = template.positions.count
-        let selectedCount = selectedPhotos.count
-        
-        if selectedCount == 0 {
-            // Показываем алерт если фото не выбраны
-            let alert = UIAlertController(title: "Выберите фотографии", message: "Пожалуйста, выберите хотя бы одну фотографию для создания коллажа", preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            present(alert, animated: true)
-            return
-        }
-        
         // Создаем массив фотографий для редактора
         var photosForEditor = selectedPhotos
         
         // Если выбрано меньше фото чем требует шаблон, добавляем пустые места
+        let requiredPhotos = template.positions.count
         while photosForEditor.count < requiredPhotos {
             photosForEditor.append(UIImage()) // Пустое изображение как заглушка
         }

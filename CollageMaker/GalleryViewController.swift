@@ -241,7 +241,7 @@ class GalleryViewController: UIViewController {
     }
     
     private func showDeleteConfirmation(for index: Int) {
-        guard let collage = viewModel.getCollage(at: index) else { return }
+        guard viewModel.getCollage(at: index) != nil else { return }
         
         let alert = UIAlertController(
             title: "Удалить коллаж?",

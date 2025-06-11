@@ -118,7 +118,6 @@ class CollageTemplateCell: UICollectionViewCell {
         // Calculate side of each square tile (for standard case).
         let tileSide = min((containerWidth - totalHorizontalSpacing) / CGFloat(columns),
                            (containerHeight - totalVerticalSpacing) / CGFloat(rows))
-        let standardTileSize = CGSize(width: tileSide, height: tileSide)
         
         // Calculate overall grid size.
         let gridWidth = outerMargin * 2 + CGFloat(columns) * tileSide + innerMargin * CGFloat(columns - 1)
@@ -136,7 +135,7 @@ class CollageTemplateCell: UICollectionViewCell {
         
         // For each position, add a tile view.
         // Здесь предполагается, что template.positions содержит (Int, Int) для каждой плитки.
-        for (index, position) in template.positions.enumerated() {
+        for (_, position) in template.positions.enumerated() {
             let col = CGFloat(position.0)
             let row = CGFloat(position.1)
             // Начальное значение для плитки – стандартный квадрат.

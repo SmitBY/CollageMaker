@@ -33,9 +33,15 @@ class TextLayerView: UIView {
     private let deleteButton: UIButton = {
         let button = UIButton(type: .system)
         button.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        button.tintColor = .red
+        button.tintColor = .systemRed
         button.backgroundColor = .white
-        button.layer.cornerRadius = 12
+        button.layer.cornerRadius = 15
+        button.layer.borderWidth = 2
+        button.layer.borderColor = UIColor.systemRed.cgColor
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOffset = CGSize(width: 0, height: 2)
+        button.layer.shadowOpacity = 0.3
+        button.layer.shadowRadius = 3
         button.isHidden = true
         return button
     }()
@@ -48,6 +54,10 @@ class TextLayerView: UIView {
             updateSelectionState()
         }
     }
+    
+    // Состояние для жестов
+    private var initialTransform: CGAffineTransform = .identity
+    private var initialCenter: CGPoint = .zero
     
     // MARK: - Initialization
     
@@ -74,8 +84,8 @@ class TextLayerView: UIView {
         }
         
         deleteButton.snp.makeConstraints { make in
-            make.top.trailing.equalToSuperview().inset(-8)
-            make.size.equalTo(24)
+            make.top.trailing.equalToSuperview().offset(8)
+            make.size.equalTo(30)
         }
         
         deleteButton.addTarget(self, action: #selector(deleteButtonTapped), for: .touchUpInside)
@@ -84,19 +94,25 @@ class TextLayerView: UIView {
     private func setupGestures() {
         // Перемещение
         let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        panGesture.delegate = self
         addGestureRecognizer(panGesture)
         
         // Масштабирование
         let pinchGesture = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
+        pinchGesture.delegate = self
         addGestureRecognizer(pinchGesture)
         
         // Вращение
         let rotationGesture = UIRotationGestureRecognizer(target: self, action: #selector(handleRotation(_:)))
+        rotationGesture.delegate = self
         addGestureRecognizer(rotationGesture)
         
         // Нажатие для выбора
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         addGestureRecognizer(tapGesture)
+        
+        // Делаем элемент интерактивным
+        isUserInteractionEnabled = true
     }
     
     // MARK: - Gesture Handlers
@@ -104,47 +120,74 @@ class TextLayerView: UIView {
     @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
         guard let containerView = superview else { return }
         
-        let translation = gesture.translation(in: containerView)
-        let newCenter = CGPoint(x: center.x + translation.x, y: center.y + translation.y)
-        
-        // Ограничиваем движение в пределах контейнера (collageView)
-        let constrainedCenter = constrainTextLayerCenter(newCenter, containerView: containerView)
-        center = constrainedCenter
-        
-        gesture.setTranslation(.zero, in: containerView)
+        switch gesture.state {
+        case .began:
+            initialCenter = center
+            setSelected(true)
+        case .changed:
+            let translation = gesture.translation(in: containerView)
+            let newCenter = CGPoint(x: initialCenter.x + translation.x, y: initialCenter.y + translation.y)
+            
+            // Ограничиваем движение в пределах контейнера
+            let constrainedCenter = constrainTextLayerCenter(newCenter, containerView: containerView)
+            center = constrainedCenter
+        case .ended, .cancelled:
+            break
+        default:
+            break
+        }
     }
     
     @objc private func handlePinch(_ gesture: UIPinchGestureRecognizer) {
         guard let containerView = superview else { return }
         
-        let newTransform = transform.scaledBy(x: gesture.scale, y: gesture.scale)
-        
-        // Ограничиваем масштаб
-        let minScale: CGFloat = 0.5
-        let maxScale: CGFloat = 2.0
-        let currentScale = sqrt(newTransform.a * newTransform.a + newTransform.c * newTransform.c)
-        
-        if currentScale >= minScale && currentScale <= maxScale {
-            transform = newTransform
+        switch gesture.state {
+        case .began:
+            initialTransform = transform
+            setSelected(true)
+        case .changed:
+            let scale = gesture.scale
+            let newTransform = initialTransform.scaledBy(x: scale, y: scale)
             
-            // После изменения масштаба корректируем позицию
-            let constrainedCenter = constrainTextLayerCenter(center, containerView: containerView)
-            center = constrainedCenter
+            // Ограничиваем масштаб
+            let minScale: CGFloat = 0.3
+            let maxScale: CGFloat = 3.0
+            let currentScale = sqrt(newTransform.a * newTransform.a + newTransform.c * newTransform.c)
+            
+            if currentScale >= minScale && currentScale <= maxScale {
+                transform = newTransform
+                
+                // После изменения масштаба корректируем позицию
+                let constrainedCenter = constrainTextLayerCenter(center, containerView: containerView)
+                center = constrainedCenter
+            }
+        case .ended, .cancelled:
+            break
+        default:
+            break
         }
-        
-        gesture.scale = 1.0
     }
     
     @objc private func handleRotation(_ gesture: UIRotationGestureRecognizer) {
         guard let containerView = superview else { return }
         
-        transform = transform.rotated(by: gesture.rotation)
-        
-        // После поворота корректируем позицию
-        let constrainedCenter = constrainTextLayerCenter(center, containerView: containerView)
-        center = constrainedCenter
-        
-        gesture.rotation = 0.0
+        switch gesture.state {
+        case .began:
+            initialTransform = transform
+            setSelected(true)
+        case .changed:
+            let rotation = gesture.rotation
+            let newTransform = initialTransform.rotated(by: rotation)
+            transform = newTransform
+            
+            // После поворота корректируем позицию
+            let constrainedCenter = constrainTextLayerCenter(center, containerView: containerView)
+            center = constrainedCenter
+        case .ended, .cancelled:
+            break
+        default:
+            break
+        }
     }
     
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
@@ -153,7 +196,13 @@ class TextLayerView: UIView {
     }
     
     @objc private func deleteButtonTapped() {
-        onDelete?()
+        // Анимация удаления
+        UIView.animate(withDuration: 0.3, animations: {
+            self.transform = self.transform.scaledBy(x: 0.1, y: 0.1)
+            self.alpha = 0
+        }) { _ in
+            self.onDelete?()
+        }
     }
     
     // MARK: - Public Methods
@@ -163,14 +212,27 @@ class TextLayerView: UIView {
     }
     
     private func updateSelectionState() {
-        if isSelected {
-            layer.borderColor = UIColor.systemBlue.cgColor
-            layer.borderWidth = 2
-            deleteButton.isHidden = false
-        } else {
-            layer.borderColor = UIColor.clear.cgColor
-            layer.borderWidth = 0
-            deleteButton.isHidden = true
+        UIView.animate(withDuration: 0.2) {
+            if self.isSelected {
+                self.layer.borderColor = UIColor.systemBlue.cgColor
+                self.layer.borderWidth = 2
+                self.layer.cornerRadius = 8
+                self.deleteButton.isHidden = false
+                
+                // Добавляем тень для выделения
+                self.layer.shadowColor = UIColor.systemBlue.cgColor
+                self.layer.shadowOffset = CGSize(width: 0, height: 2)
+                self.layer.shadowOpacity = 0.3
+                self.layer.shadowRadius = 4
+            } else {
+                self.layer.borderColor = UIColor.clear.cgColor
+                self.layer.borderWidth = 0
+                self.layer.cornerRadius = 0
+                self.deleteButton.isHidden = true
+                
+                // Убираем тень
+                self.layer.shadowOpacity = 0
+            }
         }
     }
     
@@ -201,22 +263,47 @@ class TextLayerView: UIView {
     
     private func constrainTextLayerCenter(_ center: CGPoint, containerView: UIView) -> CGPoint {
         // Получаем размеры текстового слоя с учетом трансформации
-        let layerFrame = frame
+        let transformedBounds = bounds.applying(transform)
         let containerBounds = containerView.bounds
         
-        // Добавляем небольшой отступ от краев
-        let margin: CGFloat = 10
+        // Добавляем отступ от краев
+        let margin: CGFloat = 20
         
-        // Вычисляем минимальные и максимальные позиции центра
-        let minX = layerFrame.width / 2 + margin
-        let maxX = containerBounds.width - layerFrame.width / 2 - margin
-        let minY = layerFrame.height / 2 + margin
-        let maxY = containerBounds.height - layerFrame.height / 2 - margin
+        // Учитываем размеры с трансформацией
+        let halfWidth = abs(transformedBounds.width) / 2
+        let halfHeight = abs(transformedBounds.height) / 2
+        
+        // Вычисляем ограничения
+        let minX = halfWidth + margin
+        let maxX = containerBounds.width - halfWidth - margin
+        let minY = halfHeight + margin
+        let maxY = containerBounds.height - halfHeight - margin
         
         // Ограничиваем позицию центра
         let constrainedX = max(minX, min(maxX, center.x))
         let constrainedY = max(minY, min(maxY, center.y))
         
         return CGPoint(x: constrainedX, y: constrainedY)
+    }
+}
+
+// MARK: - UIGestureRecognizerDelegate
+
+extension TextLayerView: UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        // Разрешаем одновременное выполнение pinch и rotation
+        if (gestureRecognizer is UIPinchGestureRecognizer && otherGestureRecognizer is UIRotationGestureRecognizer) ||
+           (gestureRecognizer is UIRotationGestureRecognizer && otherGestureRecognizer is UIPinchGestureRecognizer) {
+            return true
+        }
+        return false
+    }
+    
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        // Если нажали на кнопку удаления, не обрабатываем другие жесты
+        if touch.view == deleteButton {
+            return false
+        }
+        return true
     }
 } 

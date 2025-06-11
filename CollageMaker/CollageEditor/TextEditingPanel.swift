@@ -13,7 +13,6 @@ protocol TextEditingPanelDelegate: AnyObject {
     func textEditingPanel(_ panel: TextEditingPanel, didSelectColor color: UIColor)
     func textEditingPanel(_ panel: TextEditingPanel, didSelectFontSize size: CGFloat)
     func textEditingPanel(_ panel: TextEditingPanel, didSelectFont fontName: String)
-    func textEditingPanel(_ panel: TextEditingPanel, didChangeArchCurve intensity: CGFloat)
     func textEditingPanelDidFinish(_ panel: TextEditingPanel)
 }
 
@@ -89,20 +88,7 @@ class TextEditingPanel: UIView {
         return button
     }()
     
-    private let archCurveSlider: UISlider = {
-        let slider = UISlider()
-        slider.minimumValue = -1
-        slider.maximumValue = 1
-        slider.value = 0
-        return slider
-    }()
-    
-    private let archCurveLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Арка"
-        label.font = UIFont.systemFont(ofSize: 14)
-        return label
-    }()
+
     
     private let availableFonts = [
         "System": UIFont.systemFont(ofSize: 24).fontName,
@@ -164,14 +150,12 @@ class TextEditingPanel: UIView {
         containerView.addSubview(fontSizeLabel)
         containerView.addSubview(fontSizeSlider)
         containerView.addSubview(fontPickerButton)
-        containerView.addSubview(archCurveLabel)
-        containerView.addSubview(archCurveSlider)
         containerView.addSubview(doneButton)
         
         // Constraints
         containerView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview().inset(20)
-            make.bottom.equalToSuperview().offset(-20)
+            make.bottom.equalTo(safeAreaLayoutGuide).offset(-20)
         }
         
         textField.snp.makeConstraints { make in
@@ -202,19 +186,8 @@ class TextEditingPanel: UIView {
             make.height.equalTo(40)
         }
         
-        archCurveLabel.snp.makeConstraints { make in
-            make.top.equalTo(fontPickerButton.snp.bottom).offset(16)
-            make.leading.equalToSuperview().inset(16)
-        }
-        
-        archCurveSlider.snp.makeConstraints { make in
-            make.centerY.equalTo(archCurveLabel)
-            make.leading.equalTo(archCurveLabel.snp.trailing).offset(16)
-            make.trailing.equalToSuperview().inset(16)
-        }
-        
         doneButton.snp.makeConstraints { make in
-            make.top.equalTo(archCurveSlider.snp.bottom).offset(20)
+            make.top.equalTo(fontPickerButton.snp.bottom).offset(20)
             make.leading.trailing.equalToSuperview().inset(16)
             make.height.equalTo(44)
             make.bottom.equalToSuperview().inset(16)
@@ -244,11 +217,25 @@ class TextEditingPanel: UIView {
         textField.addTarget(self, action: #selector(textFieldChanged), for: .editingChanged)
         fontSizeSlider.addTarget(self, action: #selector(fontSizeChanged), for: .valueChanged)
         fontPickerButton.addTarget(self, action: #selector(fontPickerTapped), for: .touchUpInside)
-        archCurveSlider.addTarget(self, action: #selector(archCurveChanged), for: .valueChanged)
         doneButton.addTarget(self, action: #selector(doneButtonTapped), for: .touchUpInside)
         
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(backgroundTapped))
         addGestureRecognizer(tapGesture)
+        
+        // Добавляем наблюдатели для клавиатуры
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillShow),
+            name: UIResponder.keyboardWillShowNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillHide),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
     }
     
     // MARK: - Actions
@@ -279,9 +266,7 @@ class TextEditingPanel: UIView {
         showFontPicker()
     }
     
-    @objc private func archCurveChanged() {
-        delegate?.textEditingPanel(self, didChangeArchCurve: CGFloat(archCurveSlider.value))
-    }
+
     
     private func showFontPicker() {
         let alert = UIAlertController(title: "Выберите шрифт", message: nil, preferredStyle: .actionSheet)
@@ -313,6 +298,31 @@ class TextEditingPanel: UIView {
     
     @objc private func backgroundTapped() {
         endEditing(true)
+    }
+    
+    @objc private func keyboardWillShow(notification: NSNotification) {
+        guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue else { return }
+        let keyboardHeight = keyboardFrame.cgRectValue.height
+        
+        UIView.animate(withDuration: 0.3) {
+            self.containerView.snp.updateConstraints { make in
+                make.bottom.equalTo(self.safeAreaLayoutGuide).offset(-keyboardHeight - 20)
+            }
+            self.layoutIfNeeded()
+        }
+    }
+    
+    @objc private func keyboardWillHide(notification: NSNotification) {
+        UIView.animate(withDuration: 0.3) {
+            self.containerView.snp.updateConstraints { make in
+                make.bottom.equalTo(self.safeAreaLayoutGuide).offset(-20)
+            }
+            self.layoutIfNeeded()
+        }
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     // MARK: - Public Methods
