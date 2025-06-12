@@ -16,9 +16,27 @@ class PhotoEditorViewController: UIViewController {
     private let disposeBag = DisposeBag()
     weak var coordinator: HomeViewCoordinator?
     
-    // Новые свойства для хранения ограничений ширины и высоты CropGridView
-    private var cropGridWidthConstraint: NSLayoutConstraint?
-    private var cropGridHeightConstraint: NSLayoutConstraint?
+    /// Callback для возврата отредактированного изображения
+    var editingCompletion: ((UIImage?) -> Void)?
+    
+    // Переменные для обрезки
+    private var initialCropFrame: CGRect?
+    private var cropMode: CropMode = .move
+    private var cropHandles: [CropHandleView] = []
+    
+    enum CropMode {
+        case move
+        case resizeTopLeft
+        case resizeTopRight
+        case resizeBottomLeft
+        case resizeBottomRight
+        case resizeLeft
+        case resizeRight
+        case resizeTop
+        case resizeBottom
+    }
+    
+
     
     // MARK: - UI Elements
     /// Контейнер для изображения. Фон – черный, чтобы если изображение выходит за crop‑окно, оно показывалось на черном фоне.
@@ -107,21 +125,19 @@ class PhotoEditorViewController: UIViewController {
         
         print("photoContainerView bounds: \(photoContainerView.bounds)")
         
-        // Обновляем cropOverlayView.cropRect
-        if imageView.image != nil {
-            let cropRect = photoContainerView.convert(cropGridView.frame, to: imageView)
-            cropOverlayView.cropRect = cropRect
-        }
-        
-        // Если ограничения еще не установлены, создаем их
-        if cropGridWidthConstraint == nil || cropGridHeightConstraint == nil {
-            updateCropGridViewConstraints()
+        // Обновляем cropOverlayView.cropRect только когда cropGridView имеет правильный размер
+        if imageView.image != nil && !cropGridView.frame.isEmpty {
+            // Конвертируем cropGridView.frame в координаты главного view для CropOverlayView
+            let cropRectInView = photoContainerView.convert(cropGridView.frame, to: view)
+            cropOverlayView.cropRect = cropRectInView
+            print("Setting cropOverlayView.cropRect to: \(cropRectInView)")
+            updateCropHandlesPositions()
         }
     }
     
     // MARK: - UI Setup
     private func setupUI() {
-        view.backgroundColor = .white
+        view.backgroundColor = .black
         
         // Добавляем CropOverlayView поверх всего экрана
         view.addSubview(cropOverlayView)
@@ -163,25 +179,19 @@ class PhotoEditorViewController: UIViewController {
     
     private func updateCropGridViewConstraints() {
         // Удаляем старые ограничения, если они есть
+        cropGridView.translatesAutoresizingMaskIntoConstraints = true
         cropGridView.constraints.forEach { constraint in
             cropGridView.removeConstraint(constraint)
         }
         
-        // Создаем новые ограничения
-        cropGridWidthConstraint = cropGridView.widthAnchor.constraint(equalTo: photoContainerView.widthAnchor, constant: -40)
-        cropGridHeightConstraint = cropGridView.heightAnchor.constraint(equalTo: photoContainerView.widthAnchor, constant: -40)
+        // CropGridView должен покрывать только видимую часть изображения в пределах photoContainerView
+        let visibleImageRect = imageView.frame.intersection(photoContainerView.bounds)
+        cropGridView.frame = visibleImageRect
         
-        // Устанавливаем приоритет ограничений
-        if let widthConstraint = cropGridWidthConstraint, let heightConstraint = cropGridHeightConstraint {
-            widthConstraint.priority = .defaultHigh
-            heightConstraint.priority = .defaultHigh
-            NSLayoutConstraint.activate([widthConstraint, heightConstraint])
-        }
-        
-        // Центрируем CropGridView
-        cropGridView.translatesAutoresizingMaskIntoConstraints = false
-        cropGridView.centerXAnchor.constraint(equalTo: photoContainerView.centerXAnchor).isActive = true
-        cropGridView.centerYAnchor.constraint(equalTo: photoContainerView.centerYAnchor).isActive = true
+        print("ImageView frame: \(imageView.frame)")
+        print("PhotoContainer bounds: \(photoContainerView.bounds)")
+        print("Visible image rect: \(visibleImageRect)")
+        print("CropGridView frame set to: \(cropGridView.frame)")
     }
     
     // MARK: - Bindings
@@ -205,19 +215,31 @@ class PhotoEditorViewController: UIViewController {
                 }
                 
                 self.view.layoutIfNeeded()
+                
+                        // Обновляем размеры cropGridView чтобы покрыть весь imageView
+        self.updateCropGridViewConstraints()
+        
+        // Создаем и позиционируем маркеры
+        self.setupCropHandles()
             })
             .disposed(by: disposeBag)
         
         cancelButton.rx.tap
             .subscribe(onNext: { [weak self] in
+                self?.editingCompletion?(nil) // Возвращаем nil при отмене
                 self?.dismiss(animated: true, completion: nil)
             })
             .disposed(by: disposeBag)
         
         saveButton.rx.tap
             .subscribe(onNext: { [weak self] in
+                guard let self = self else { return }
                 print("Save button tapped")
-                self?.dismiss(animated: true, completion: nil)
+                
+                // Создаем обрезанное изображение
+                let croppedImage = self.createCroppedImage()
+                self.editingCompletion?(croppedImage)
+                self.dismiss(animated: true, completion: nil)
             })
             .disposed(by: disposeBag)
     }
@@ -235,10 +257,7 @@ class PhotoEditorViewController: UIViewController {
         imageView.addGestureRecognizer(pinchGesture)
         imageView.addGestureRecognizer(rotationGesture)
         
-        // Добавляем pan gesture для CropGridView
-        let gridPanGesture = UIPanGestureRecognizer(target: self, action: #selector(handleCropGridPan(_:)))
-        gridPanGesture.delegate = self
-        cropGridView.addGestureRecognizer(gridPanGesture)
+        // Жесты теперь обрабатываются отдельными маркерами
     }
     
     // MARK: - Gesture Handlers
@@ -258,78 +277,7 @@ class PhotoEditorViewController: UIViewController {
         }
     }
     
-    @objc private func handleCropGridPan(_ gesture: UIPanGestureRecognizer) {
-        guard let cropGridView = gesture.view else { return }
-        
-        let location = gesture.location(in: cropGridView)
-        let threshold: CGFloat = 20.0
-        let gridBounds = cropGridView.bounds
-        
-        // Определяем, в какой зоне находится касание
-        let isNearLeft = location.x <= threshold
-        let isNearRight = location.x >= (gridBounds.width - threshold)
-        let isNearTop = location.y <= threshold
-        let isNearBottom = location.y >= (gridBounds.height - threshold)
-        
-        let translation = gesture.translation(in: photoContainerView)
-        
-        switch gesture.state {
-        case .began, .changed:
-            if isNearLeft || isNearRight || isNearTop || isNearBottom {
-                // Режим изменения размера
-                let minCropSize: CGFloat = 50.0
-                let maxCropSize = min(photoContainerView.bounds.width, photoContainerView.bounds.height) - 40
-                
-                var newWidth = cropGridView.frame.width
-                var newHeight = cropGridView.frame.height
-                
-                if isNearLeft {
-                    newWidth -= translation.x
-                } else if isNearRight {
-                    newWidth += translation.x
-                }
-                
-                if isNearTop {
-                    newHeight -= translation.y
-                } else if isNearBottom {
-                    newHeight += translation.y
-                }
-                
-                // Ограничиваем минимальный и максимальный размер
-                newWidth = max(minCropSize, min(newWidth, maxCropSize))
-                newHeight = max(minCropSize, min(newHeight, maxCropSize))
-                
-                // Обновляем размеры CropGridView
-                cropGridWidthConstraint?.constant = newWidth - photoContainerView.bounds.width
-                cropGridHeightConstraint?.constant = newHeight - photoContainerView.bounds.height
-                
-                // Обновляем layout
-                view.layoutIfNeeded()
-            } else {
-                // Режим перемещения
-                var newCenter = CGPoint(
-                    x: cropGridView.center.x + translation.x,
-                    y: cropGridView.center.y + translation.y
-                )
-                
-                // Ограничиваем движение CropGridView внутри photoContainerView
-                let containerBounds = photoContainerView.bounds
-                let halfWidth = cropGridView.bounds.width / 2
-                let halfHeight = cropGridView.bounds.height / 2
-                
-                newCenter.x = max(halfWidth + 20, min(newCenter.x, containerBounds.width - halfWidth - 20))
-                newCenter.y = max(halfHeight + 20, min(newCenter.y, containerBounds.height - halfHeight - 20))
-                
-                cropGridView.center = newCenter
-            }
-            
-            // Сбрасываем смещение жеста
-            gesture.setTranslation(.zero, in: photoContainerView)
-            
-        default:
-            break
-        }
-    }
+    // Старый метод обработки жестов удален - теперь используем отдельные маркеры
 }
 
 // MARK: - UIGestureRecognizerDelegate
@@ -338,5 +286,261 @@ extension PhotoEditorViewController: UIGestureRecognizerDelegate {
                            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         // Разрешаем одновременное распознавание жестов для разных элементов
         return true
+    }
+}
+
+// MARK: - Crop Handles Management
+extension PhotoEditorViewController {
+    private func setupCropHandles() {
+        print("Setting up crop handles")
+        
+        // Удаляем старые маркеры
+        cropHandles.forEach { $0.removeFromSuperview() }
+        cropHandles.removeAll()
+        
+        // Создаем угловые маркеры
+        let cornerPositions: [CropHandleView.Position] = [.topLeft, .topRight, .bottomLeft, .bottomRight]
+        for position in cornerPositions {
+            let handle = CropHandleView(type: .corner, position: position)
+            view.addSubview(handle) // Добавляем на главный view для z-index
+            cropHandles.append(handle)
+            
+            // Добавляем жест
+            let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleCropHandlePan(_:)))
+            handle.addGestureRecognizer(panGesture)
+            print("Created corner handle: \(position)")
+        }
+        
+        // Создаем боковые маркеры
+        let edgePositions: [CropHandleView.Position] = [.top, .bottom, .left, .right]
+        for position in edgePositions {
+            let handle = CropHandleView(type: .edge, position: position)
+            view.addSubview(handle) // Добавляем на главный view для z-index
+            cropHandles.append(handle)
+            
+            // Добавляем жест
+            let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleCropHandlePan(_:)))
+            handle.addGestureRecognizer(panGesture)
+            print("Created edge handle: \(position)")
+        }
+        
+        print("Total handles created: \(cropHandles.count)")
+        
+        // Позиционируем маркеры
+        updateCropHandlesPositions()
+    }
+    
+    private func updateCropHandlesPositions() {
+        let cropFrame = cropGridView.frame
+        let offset: CGFloat = 15 // Смещение маркеров от края рамки
+        
+        // Проверяем что рамка имеет нормальные размеры
+        guard cropFrame.width > 0 && cropFrame.height > 0 else {
+            print("cropFrame is empty: \(cropFrame)")
+            return
+        }
+        
+        // Конвертируем координаты cropGridView в координаты главного view
+        let cropFrameInView = photoContainerView.convert(cropFrame, to: view)
+        print("Updating handle positions for cropFrame: \(cropFrame), in view: \(cropFrameInView)")
+        
+        for handle in cropHandles {
+            switch handle.position {
+            case .topLeft:
+                handle.center = CGPoint(x: cropFrameInView.minX - offset, y: cropFrameInView.minY - offset)
+            case .topRight:
+                handle.center = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.minY - offset)
+            case .bottomLeft:
+                handle.center = CGPoint(x: cropFrameInView.minX - offset, y: cropFrameInView.maxY + offset)
+            case .bottomRight:
+                handle.center = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.maxY + offset)
+            case .top:
+                handle.center = CGPoint(x: cropFrameInView.midX, y: cropFrameInView.minY - offset)
+            case .bottom:
+                handle.center = CGPoint(x: cropFrameInView.midX, y: cropFrameInView.maxY + offset)
+            case .left:
+                handle.center = CGPoint(x: cropFrameInView.minX - offset, y: cropFrameInView.midY)
+            case .right:
+                handle.center = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.midY)
+            }
+            print("Handle \(handle.position) positioned at: \(handle.center)")
+        }
+    }
+    
+    @objc private func handleCropHandlePan(_ gesture: UIPanGestureRecognizer) {
+        guard let handle = gesture.view as? CropHandleView else { 
+            print("No handle found in gesture")
+            return 
+        }
+        
+        let translation = gesture.translation(in: view)
+        let imageFrame = photoContainerView.convert(imageView.frame, to: view)
+        let minCropSize: CGFloat = 100.0
+        
+        switch gesture.state {
+        case .began:
+            print("Gesture began on handle: \(handle.position)")
+            initialCropFrame = cropGridView.frame
+            print("Initial crop frame: \(String(describing: initialCropFrame))")
+            
+        case .changed:
+            guard let initialFrame = initialCropFrame else { return }
+            
+            // Конвертируем initialFrame в координаты view для вычислений
+            let initialFrameInView = photoContainerView.convert(initialFrame, to: view)
+            var newFrameInView = initialFrameInView
+            
+            switch handle.position {
+            case .topLeft:
+                let deltaX = translation.x
+                let deltaY = translation.y
+                newFrameInView.origin.x = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
+                newFrameInView.origin.y = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
+                newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
+                newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
+                
+            case .topRight:
+                let deltaX = translation.x
+                let deltaY = translation.y
+                newFrameInView.origin.y = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
+                newFrameInView.size.width = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
+                newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
+                
+            case .bottomLeft:
+                let deltaX = translation.x
+                let deltaY = translation.y
+                newFrameInView.origin.x = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
+                newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
+                newFrameInView.size.height = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
+                
+            case .bottomRight:
+                let deltaX = translation.x
+                let deltaY = translation.y
+                newFrameInView.size.width = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
+                newFrameInView.size.height = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
+                
+            case .left:
+                let deltaX = translation.x
+                newFrameInView.origin.x = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
+                newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
+                
+            case .right:
+                let deltaX = translation.x
+                newFrameInView.size.width = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
+                
+            case .top:
+                let deltaY = translation.y
+                newFrameInView.origin.y = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
+                newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
+                
+            case .bottom:
+                let deltaY = translation.y
+                newFrameInView.size.height = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
+            }
+            
+            // Конвертируем обратно в координаты photoContainerView
+            let newFrame = view.convert(newFrameInView, to: photoContainerView)
+            cropGridView.frame = newFrame
+            
+            // CropOverlayView работает в координатах главного view
+            cropOverlayView.cropRect = newFrameInView
+            updateCropHandlesPositions()
+            
+        case .ended, .cancelled:
+            initialCropFrame = nil
+            
+        default:
+            break
+        }
+    }
+}
+
+// MARK: - Crop Grid Touch Handling  
+extension PhotoEditorViewController {
+    // Старые методы больше не нужны - используем отдельные маркеры
+}
+
+// MARK: - Image Processing
+extension PhotoEditorViewController {
+    /// Создает обрезанное изображение на основе текущей позиции cropGridView
+    private func createCroppedImage() -> UIImage? {
+        guard let originalImage = imageView.image else { 
+            print("No original image found")
+            return nil 
+        }
+        
+        print("[Crop Debug] Starting crop process")
+        print("[Crop Debug] Original image size: \(originalImage.size)")
+        print("[Crop Debug] ImageView frame: \(imageView.frame)")
+        print("[Crop Debug] PhotoContainer bounds: \(photoContainerView.bounds)")
+        print("[Crop Debug] CropGridView frame: \(cropGridView.frame)")
+        
+        // Находим видимую часть imageView (пересечение с photoContainerView)
+        let visibleImageRect = imageView.frame.intersection(photoContainerView.bounds)
+        print("[Crop Debug] Visible image rect: \(visibleImageRect)")
+        
+        // Проверяем, что есть видимая область
+        guard !visibleImageRect.isEmpty else {
+            print("[Crop Debug] No visible image area")
+            return originalImage
+        }
+        
+        // Получаем фрейм cropGridView в координатах photoContainerView
+        let cropRect = cropGridView.frame
+        print("[Crop Debug] Crop rect in container: \(cropRect)")
+        
+        // Вычисляем относительные координаты cropRect относительно видимой части изображения
+        let relativeX = (cropRect.origin.x - visibleImageRect.origin.x) / visibleImageRect.width
+        let relativeY = (cropRect.origin.y - visibleImageRect.origin.y) / visibleImageRect.height
+        let relativeWidth = cropRect.width / visibleImageRect.width
+        let relativeHeight = cropRect.height / visibleImageRect.height
+        
+        print("[Crop Debug] Relative to visible: x=\(relativeX), y=\(relativeY), w=\(relativeWidth), h=\(relativeHeight)")
+        
+        // Проверяем границы (crop должен быть внутри видимой области)
+        guard relativeX >= 0 && relativeY >= 0 && 
+              relativeX + relativeWidth <= 1.0 && relativeY + relativeHeight <= 1.0 else {
+            print("[Crop Debug] Crop rect is outside visible bounds")
+            return originalImage
+        }
+        
+        // Теперь нужно вычислить, какая часть полного imageView является видимой
+        let imageViewBounds = imageView.bounds
+        let visibleRelativeToFullX = (visibleImageRect.origin.x - imageView.frame.origin.x) / imageView.frame.width
+        let visibleRelativeToFullY = (visibleImageRect.origin.y - imageView.frame.origin.y) / imageView.frame.height
+        let visibleRelativeToFullWidth = visibleImageRect.width / imageView.frame.width
+        let visibleRelativeToFullHeight = visibleImageRect.height / imageView.frame.height
+        
+        print("[Crop Debug] Visible relative to full image: x=\(visibleRelativeToFullX), y=\(visibleRelativeToFullY), w=\(visibleRelativeToFullWidth), h=\(visibleRelativeToFullHeight)")
+        
+        // Финальные координаты в полном изображении
+        let finalRelativeX = visibleRelativeToFullX + (relativeX * visibleRelativeToFullWidth)
+        let finalRelativeY = visibleRelativeToFullY + (relativeY * visibleRelativeToFullHeight)
+        let finalRelativeWidth = relativeWidth * visibleRelativeToFullWidth
+        let finalRelativeHeight = relativeHeight * visibleRelativeToFullHeight
+        
+        print("[Crop Debug] Final relative coordinates: x=\(finalRelativeX), y=\(finalRelativeY), w=\(finalRelativeWidth), h=\(finalRelativeHeight)")
+        
+        // Переводим в координаты исходного изображения
+        let imageSize = originalImage.size
+        let cropX = max(0, finalRelativeX * imageSize.width)
+        let cropY = max(0, finalRelativeY * imageSize.height)
+        let cropWidth = min(imageSize.width - cropX, finalRelativeWidth * imageSize.width)
+        let cropHeight = min(imageSize.height - cropY, finalRelativeHeight * imageSize.height)
+        
+        // Создаем CGRect для обрезки
+        let cgCropRect = CGRect(x: cropX, y: cropY, width: cropWidth, height: cropHeight)
+        print("[Crop Debug] Final crop rect: \(cgCropRect)")
+        
+        // Обрезаем изображение
+        guard let cgImage = originalImage.cgImage?.cropping(to: cgCropRect) else { 
+            print("[Crop Debug] Failed to crop image")
+            return originalImage
+        }
+        
+        // Создаем новое UIImage
+        let croppedImage = UIImage(cgImage: cgImage, scale: originalImage.scale, orientation: originalImage.imageOrientation)
+        print("[Crop Debug] Successfully cropped image to size: \(croppedImage.size)")
+        return croppedImage
     }
 }
