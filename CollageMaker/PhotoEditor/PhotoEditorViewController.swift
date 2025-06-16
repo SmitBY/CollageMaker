@@ -24,6 +24,12 @@ class PhotoEditorViewController: UIViewController {
     private var cropMode: CropMode = .move
     private var cropHandles: [CropHandleView] = []
     
+    // Фильтры
+    private let filtersManager = ImageFiltersManager()
+    private var originalImage: UIImage?
+    private var currentFilterType: ImageFiltersManager.FilterType = .none
+    private var filterPreviews: [ImageFiltersManager.FilterType: UIImage] = [:]
+    
     enum CropMode {
         case move
         case resizeTopLeft
@@ -69,6 +75,22 @@ class PhotoEditorViewController: UIViewController {
         grid.backgroundColor = .clear
         grid.isUserInteractionEnabled = true
         return grid
+    }()
+    
+    /// Коллекция фильтров
+    private let filtersCollectionView: UICollectionView = {
+        let layout = UICollectionViewFlowLayout()
+        layout.scrollDirection = .horizontal
+        layout.itemSize = CGSize(width: 80, height: 100)
+        layout.minimumInteritemSpacing = 8
+        layout.minimumLineSpacing = 8
+        layout.sectionInset = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
+        
+        let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        cv.backgroundColor = .clear
+        cv.showsHorizontalScrollIndicator = false
+        cv.register(FilterCollectionViewCell.self, forCellWithReuseIdentifier: FilterCollectionViewCell.identifier)
+        return cv
     }()
     
     /// UIStackView для кнопок Cancel и Save.
@@ -118,6 +140,7 @@ class PhotoEditorViewController: UIViewController {
         setupUI()
         setupBindings()
         setupGestureRecognizers()
+        setupFiltersCollection()
     }
     
     override func viewDidLayoutSubviews() {
@@ -166,12 +189,20 @@ class PhotoEditorViewController: UIViewController {
             make.center.equalTo(imageView)
         }
         
+        // Добавляем коллекцию фильтров
+        view.addSubview(filtersCollectionView)
+        filtersCollectionView.snp.makeConstraints { make in
+            make.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).inset(100)
+            make.left.right.equalToSuperview()
+            make.height.equalTo(120)
+        }
+        
         // Добавляем кнопки
         view.addSubview(buttonStackView)
         buttonStackView.addArrangedSubview(cancelButton)
         buttonStackView.addArrangedSubview(saveButton)
         buttonStackView.snp.makeConstraints { make in
-            make.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).inset(40)
+            make.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).inset(20)
             make.left.right.equalToSuperview().inset(16)
             make.height.equalTo(44)
         }
@@ -201,6 +232,9 @@ class PhotoEditorViewController: UIViewController {
             .subscribe(onNext: { [weak self] image in
                 guard let self = self, let image = image else { return }
                 
+                // Сохраняем оригинальное изображение
+                self.originalImage = image
+                
                 // Вывод оригинального разрешения в пикселях:
                 print("Original image resolution: \(image.size.width * image.scale) x \(image.size.height * image.scale)")
                 
@@ -216,11 +250,14 @@ class PhotoEditorViewController: UIViewController {
                 
                 self.view.layoutIfNeeded()
                 
-                        // Обновляем размеры cropGridView чтобы покрыть весь imageView
-        self.updateCropGridViewConstraints()
-        
-        // Создаем и позиционируем маркеры
-        self.setupCropHandles()
+                // Обновляем размеры cropGridView чтобы покрыть весь imageView
+                self.updateCropGridViewConstraints()
+                
+                // Создаем и позиционируем маркеры
+                self.setupCropHandles()
+                
+                // Генерируем превью фильтров
+                self.generateFilterPreviews()
             })
             .disposed(by: disposeBag)
         
@@ -237,8 +274,14 @@ class PhotoEditorViewController: UIViewController {
                 print("Save button tapped")
                 
                 // Создаем обрезанное изображение
-                let croppedImage = self.createCroppedImage()
-                self.editingCompletion?(croppedImage)
+                var finalImage = self.createCroppedImage()
+                
+                // Применяем текущий фильтр к обрезанному изображению
+                if self.currentFilterType != .none, let croppedImage = finalImage {
+                    finalImage = self.filtersManager.applyFilter(self.currentFilterType, to: croppedImage)
+                }
+                
+                self.editingCompletion?(finalImage)
                 self.dismiss(animated: true, completion: nil)
             })
             .disposed(by: disposeBag)
@@ -541,5 +584,64 @@ extension PhotoEditorViewController {
         let croppedImage = UIImage(cgImage: cgImage, scale: originalImage.scale, orientation: originalImage.imageOrientation)
         print("[Crop Debug] Successfully cropped image to size: \(croppedImage.size)")
         return croppedImage
+    }
+}
+
+// MARK: - Filters
+extension PhotoEditorViewController {
+    private func setupFiltersCollection() {
+        filtersCollectionView.delegate = self
+        filtersCollectionView.dataSource = self
+    }
+    
+    private func generateFilterPreviews() {
+        guard let originalImage = originalImage else { return }
+        
+        filtersManager.generateFilterPreviews(for: originalImage) { [weak self] previews in
+            self?.filterPreviews = previews
+            self?.filtersCollectionView.reloadData()
+        }
+    }
+    
+    private func applyFilter(_ filterType: ImageFiltersManager.FilterType) {
+        guard let originalImage = originalImage else { return }
+        
+        currentFilterType = filterType
+        
+        if filterType == .none {
+            imageView.image = originalImage
+        } else {
+            if let filteredImage = filtersManager.applyFilter(filterType, to: originalImage) {
+                imageView.image = filteredImage
+            }
+        }
+    }
+}
+
+// MARK: - UICollectionViewDataSource
+extension PhotoEditorViewController: UICollectionViewDataSource {
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        return ImageFiltersManager.FilterType.allCases.count
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: FilterCollectionViewCell.identifier, for: indexPath) as! FilterCollectionViewCell
+        
+        let filterType = ImageFiltersManager.FilterType.allCases[indexPath.item]
+        let previewImage = filterPreviews[filterType]
+        
+        cell.configure(with: previewImage, title: filterType.displayName)
+        cell.isSelected = (filterType == currentFilterType)
+        
+        return cell
+    }
+}
+
+// MARK: - UICollectionViewDelegate
+extension PhotoEditorViewController: UICollectionViewDelegate {
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        let filterType = ImageFiltersManager.FilterType.allCases[indexPath.item]
+        applyFilter(filterType)
+        collectionView.reloadData() // Обновляем выделение
     }
 }
