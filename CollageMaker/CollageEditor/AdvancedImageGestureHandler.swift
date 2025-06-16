@@ -3,6 +3,7 @@ import UIKit
 protocol AdvancedImageGestureHandlerDelegate: AnyObject {
     func gestureHandler(_ handler: AdvancedImageGestureHandler, didUpdateTransform transform: CGAffineTransform, for imageView: UIImageView)
     func gestureHandler(_ handler: AdvancedImageGestureHandler, didUpdateFrame frame: CGRect, for imageView: UIImageView)
+    func gestureHandler(_ handler: AdvancedImageGestureHandler, didTapImageView imageView: UIImageView)
 }
 
 class AdvancedImageGestureHandler: NSObject {
@@ -287,7 +288,8 @@ class AdvancedImageGestureHandler: NSObject {
     // MARK: - Gesture Handlers
     
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
-        setSelected(!isSelected)
+        guard let imageView = imageView else { return }
+        delegate?.gestureHandler(self, didTapImageView: imageView)
     }
     
     @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {

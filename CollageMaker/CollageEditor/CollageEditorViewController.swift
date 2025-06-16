@@ -26,8 +26,10 @@ class CollageEditorViewController: UIViewController {
     // MARK: - UI Elements
     
     private let collageView = UIView()
+    private let backgroundImageView = UIImageView()
     private let saveButton = UIButton(type: .system)
     private let addTextButton = UIButton(type: .system)
+    private let changeBackgroundButton = UIButton(type: .system)
     
     // Контейнер для ползунков
     private let slidersContainerView = UIView()
@@ -138,10 +140,22 @@ class CollageEditorViewController: UIViewController {
         addTextButton.setTitleColor(.white, for: .normal)
         addTextButton.layer.cornerRadius = 8
         
+        // Настройка кнопки смены фона
+        changeBackgroundButton.setTitle("Фон", for: .normal)
+        changeBackgroundButton.titleLabel?.font = UIFont.systemFont(ofSize: 16)
+        changeBackgroundButton.backgroundColor = .systemOrange
+        changeBackgroundButton.setTitleColor(.white, for: .normal)
+        changeBackgroundButton.layer.cornerRadius = 8
+        
         // Настройка области коллажа
         collageView.backgroundColor = .lightGray
         collageView.layer.cornerRadius = 12
         collageView.clipsToBounds = true
+        
+        // Настройка фонового изображения
+        backgroundImageView.contentMode = .scaleAspectFill
+        backgroundImageView.clipsToBounds = true
+        backgroundImageView.layer.cornerRadius = 12
         
         // Настройка контейнера для ползунков
         slidersContainerView.backgroundColor = .systemBackground
@@ -154,6 +168,10 @@ class CollageEditorViewController: UIViewController {
         view.addSubview(slidersContainerView)
         view.addSubview(saveButton)
         view.addSubview(addTextButton)
+        view.addSubview(changeBackgroundButton)
+        
+        // Добавляем фоновое изображение в collageView (самое первое, чтобы оно было позади всех элементов)
+        collageView.addSubview(backgroundImageView)
         
         // Добавляем ползунки в контейнер
         slidersContainerView.addSubview(cornerRadiusLabel)
@@ -166,6 +184,11 @@ class CollageEditorViewController: UIViewController {
             make.top.equalTo(view.safeAreaLayoutGuide).offset(20)
             make.leading.trailing.equalToSuperview().inset(20)
             make.bottom.equalTo(slidersContainerView.snp.top).offset(-10)
+        }
+        
+        // Constraints для фонового изображения - заполняет весь collageView
+        backgroundImageView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
         }
         
         slidersContainerView.snp.makeConstraints { make in
@@ -214,6 +237,13 @@ class CollageEditorViewController: UIViewController {
             make.height.equalTo(40)
         }
         
+        changeBackgroundButton.snp.makeConstraints { make in
+            make.trailing.equalTo(addTextButton.snp.leading).offset(-10)
+            make.bottom.equalTo(slidersContainerView.snp.top).offset(-10)
+            make.width.equalTo(60)
+            make.height.equalTo(40)
+        }
+        
         // Убеждаемся, что кнопки всегда поверх других элементов
         ensureButtonsOnTop()
         
@@ -226,6 +256,7 @@ class CollageEditorViewController: UIViewController {
         view.bringSubviewToFront(slidersContainerView)
         view.bringSubviewToFront(saveButton)
         view.bringSubviewToFront(addTextButton)
+        view.bringSubviewToFront(changeBackgroundButton)
         
         // Добавляем тень для лучшей видимости
         saveButton.layer.shadowColor = UIColor.black.cgColor
@@ -237,6 +268,11 @@ class CollageEditorViewController: UIViewController {
         addTextButton.layer.shadowOffset = CGSize(width: 0, height: 2)
         addTextButton.layer.shadowOpacity = 0.3
         addTextButton.layer.shadowRadius = 4
+        
+        changeBackgroundButton.layer.shadowColor = UIColor.black.cgColor
+        changeBackgroundButton.layer.shadowOffset = CGSize(width: 0, height: 2)
+        changeBackgroundButton.layer.shadowOpacity = 0.3
+        changeBackgroundButton.layer.shadowRadius = 4
         
         slidersContainerView.layer.shadowColor = UIColor.black.cgColor
         slidersContainerView.layer.shadowOffset = CGSize(width: 0, height: 2)
@@ -338,8 +374,12 @@ class CollageEditorViewController: UIViewController {
     /// The preview displays a grid of square tiles with white borders and placeholder images,
     /// centered in collageView. Special templates (2x2 grid with one tile stretched) обрабатываются.
     private func setupCollageView(with template: CollageTemplate) {
-        // Очищаем старый коллаж
-        collageView.subviews.forEach { $0.removeFromSuperview() }
+        // Очищаем старый коллаж, кроме backgroundImageView
+        collageView.subviews.forEach { subview in
+            if subview !== backgroundImageView {
+                subview.removeFromSuperview()
+            }
+        }
         
         // Сбрасываем сохраненные размеры сетки
         currentColumnWidths.removeAll()
@@ -383,6 +423,9 @@ class CollageEditorViewController: UIViewController {
         let gridContentWidth = CGFloat(columns) * tileSide + totalHorizontalSpacing
         let gridContentHeight = CGFloat(rows) * tileSide + totalVerticalSpacing
         let gridSize = max(gridContentWidth, gridContentHeight) + 2 * outerMargin
+        
+        // Убеждаемся, что фоновое изображение находится в самом низу стека
+        collageView.sendSubviewToBack(backgroundImageView)
         
         // Создаем контейнер для сетки и центрируем его в collageView.
         let gridContainer = UIView()
@@ -484,6 +527,12 @@ class CollageEditorViewController: UIViewController {
         addTextButton.rx.tap
             .subscribe(onNext: { [weak self] in
                 self?.addTextLayer()
+            })
+            .disposed(by: disposeBag)
+        
+        changeBackgroundButton.rx.tap
+            .subscribe(onNext: { [weak self] in
+                self?.changeBackground()
             })
             .disposed(by: disposeBag)
         
@@ -600,6 +649,18 @@ class CollageEditorViewController: UIViewController {
         
         // Убеждаемся, что кнопки остаются доступными
         ensureButtonsOnTop()
+    }
+    
+    private func changeBackground() {
+        let imagePicker = UIImagePickerController()
+        imagePicker.delegate = self
+        imagePicker.sourceType = .photoLibrary
+        imagePicker.allowsEditing = false
+        
+        // Устанавливаем специальный тег для идентификации изменения фона
+        imagePicker.view.tag = 999
+        
+        present(imagePicker, animated: true, completion: nil)
     }
     
     private func selectTextLayer(_ textLayer: TextLayerView) {
@@ -731,9 +792,15 @@ class CollageEditorViewController: UIViewController {
         }
         defer { UIGraphicsEndImageContext() }
         
-        // Fill background with white.
-        UIColor.white.setFill()
-        context.fill(CGRect(origin: .zero, size: finalCollageSize))
+        // Рисуем фоновое изображение или белый фон
+        if let backgroundImage = backgroundImageView.image {
+            // Рисуем фоновое изображение, растягивая его на весь финальный размер
+            backgroundImage.draw(in: CGRect(origin: .zero, size: finalCollageSize))
+        } else {
+            // Если фона нет, заливаем белым цветом
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: finalCollageSize))
+        }
         
         // Вычисляем масштаб для перевода из текущих размеров в финальные
         let currentGridSize = gridContainer.bounds.size
@@ -1326,17 +1393,23 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
         picker.dismiss(animated: true) { [weak self] in
             guard let self = self,
-                  let selectedImage = info[.originalImage] as? UIImage,
-                  let indexPath = self.currentIndexPath else { return }
+                  let selectedImage = info[.originalImage] as? UIImage else { return }
             
-            // Обновляем изображение в модели
-            self.viewModel.setImage(at: indexPath, image: selectedImage)
-            
-            // Обновляем UI
-            self.updateTileWithNewImage(at: indexPath.item, image: selectedImage)
-            
-            // Сбрасываем текущий индекс
-            self.currentIndexPath = nil
+            // Проверяем, вызван ли пикер для смены фона
+            if picker.view.tag == 999 {
+                // Изменяем фон коллажа
+                self.backgroundImageView.image = selectedImage
+            } else if let indexPath = self.currentIndexPath {
+                // Обычное изменение изображения в плитке
+                // Обновляем изображение в модели
+                self.viewModel.setImage(at: indexPath, image: selectedImage)
+                
+                // Обновляем UI
+                self.updateTileWithNewImage(at: indexPath.item, image: selectedImage)
+                
+                // Сбрасываем текущий индекс
+                self.currentIndexPath = nil
+            }
         }
     }
     
@@ -1408,5 +1481,22 @@ extension CollageEditorViewController: AdvancedImageGestureHandlerDelegate {
         
         // Убеждаемся, что кнопки остаются доступными
         ensureButtonsOnTop()
+    }
+    
+    func gestureHandler(_ handler: AdvancedImageGestureHandler, didTapImageView imageView: UIImageView) {
+        guard let image = imageView.image else { return }
+        
+        // Открываем редактор изображений
+        coordinator?.showPhotoEditor(with: image) { [weak self, weak imageView] editedImage in
+            // Обновляем изображение после редактирования
+            if let editedImage = editedImage, let imageView = imageView {
+                imageView.image = editedImage
+                
+                // Обновляем массив выбранных фотографий
+                if let tag = imageView.superview?.tag, tag < self?.selectedPhotos.count ?? 0 {
+                    self?.selectedPhotos[tag] = editedImage
+                }
+            }
+        }
     }
 }

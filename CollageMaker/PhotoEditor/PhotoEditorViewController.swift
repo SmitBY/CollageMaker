@@ -505,7 +505,6 @@ extension PhotoEditorViewController {
         }
         
         // Теперь нужно вычислить, какая часть полного imageView является видимой
-        let imageViewBounds = imageView.bounds
         let visibleRelativeToFullX = (visibleImageRect.origin.x - imageView.frame.origin.x) / imageView.frame.width
         let visibleRelativeToFullY = (visibleImageRect.origin.y - imageView.frame.origin.y) / imageView.frame.height
         let visibleRelativeToFullWidth = visibleImageRect.width / imageView.frame.width
