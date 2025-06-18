@@ -29,6 +29,7 @@ class CollageEditorViewController: UIViewController {
     private let backgroundImageView = UIImageView()
     private let saveButton = UIButton(type: .system)
     private let addTextButton = UIButton(type: .system)
+    private let addStickerButton = UIButton(type: .system)
     private let changeBackgroundButton = UIButton(type: .system)
     
     // Контейнер для ползунков
@@ -71,8 +72,10 @@ class CollageEditorViewController: UIViewController {
     // Данные для коллажа
     private var selectedPhotos: [UIImage] = [] // Выбранные пользователем фотографии
     private var textLayers: [TextLayerView] = [] // Текстовые слои
+    private var stickerViews: [StickerView] = [] // Стикеры
     private var borderViews: [BorderDragView] = [] // Границы для изменения размеров
     private var currentTextLayer: TextLayerView?
+    private var currentStickerView: StickerView?
     private var textEditingPanel: TextEditingPanel?
     
     // Сохраняем текущие размеры сетки
@@ -140,6 +143,13 @@ class CollageEditorViewController: UIViewController {
         addTextButton.setTitleColor(.white, for: .normal)
         addTextButton.layer.cornerRadius = 8
         
+        // Настройка кнопки добавления стикеров
+        addStickerButton.setTitle("😀", for: .normal)
+        addStickerButton.titleLabel?.font = UIFont.systemFont(ofSize: 20)
+        addStickerButton.backgroundColor = .systemPurple
+        addStickerButton.setTitleColor(.white, for: .normal)
+        addStickerButton.layer.cornerRadius = 8
+        
         // Настройка кнопки смены фона
         changeBackgroundButton.setTitle("Фон", for: .normal)
         changeBackgroundButton.titleLabel?.font = UIFont.systemFont(ofSize: 16)
@@ -168,6 +178,7 @@ class CollageEditorViewController: UIViewController {
         view.addSubview(slidersContainerView)
         view.addSubview(saveButton)
         view.addSubview(addTextButton)
+        view.addSubview(addStickerButton)
         view.addSubview(changeBackgroundButton)
         
         // Добавляем фоновое изображение в collageView (самое первое, чтобы оно было позади всех элементов)
@@ -237,8 +248,15 @@ class CollageEditorViewController: UIViewController {
             make.height.equalTo(40)
         }
         
-        changeBackgroundButton.snp.makeConstraints { make in
+        addStickerButton.snp.makeConstraints { make in
             make.trailing.equalTo(addTextButton.snp.leading).offset(-10)
+            make.bottom.equalTo(slidersContainerView.snp.top).offset(-10)
+            make.width.equalTo(50)
+            make.height.equalTo(40)
+        }
+        
+        changeBackgroundButton.snp.makeConstraints { make in
+            make.trailing.equalTo(addStickerButton.snp.leading).offset(-10)
             make.bottom.equalTo(slidersContainerView.snp.top).offset(-10)
             make.width.equalTo(60)
             make.height.equalTo(40)
@@ -256,6 +274,7 @@ class CollageEditorViewController: UIViewController {
         view.bringSubviewToFront(slidersContainerView)
         view.bringSubviewToFront(saveButton)
         view.bringSubviewToFront(addTextButton)
+        view.bringSubviewToFront(addStickerButton)
         view.bringSubviewToFront(changeBackgroundButton)
         
         // Добавляем тень для лучшей видимости
@@ -268,6 +287,11 @@ class CollageEditorViewController: UIViewController {
         addTextButton.layer.shadowOffset = CGSize(width: 0, height: 2)
         addTextButton.layer.shadowOpacity = 0.3
         addTextButton.layer.shadowRadius = 4
+        
+        addStickerButton.layer.shadowColor = UIColor.black.cgColor
+        addStickerButton.layer.shadowOffset = CGSize(width: 0, height: 2)
+        addStickerButton.layer.shadowOpacity = 0.3
+        addStickerButton.layer.shadowRadius = 4
         
         changeBackgroundButton.layer.shadowColor = UIColor.black.cgColor
         changeBackgroundButton.layer.shadowOffset = CGSize(width: 0, height: 2)
@@ -530,6 +554,12 @@ class CollageEditorViewController: UIViewController {
             })
             .disposed(by: disposeBag)
         
+        addStickerButton.rx.tap
+            .subscribe(onNext: { [weak self] in
+                self?.showStickerPicker()
+            })
+            .disposed(by: disposeBag)
+        
         changeBackgroundButton.rx.tap
             .subscribe(onNext: { [weak self] in
                 self?.changeBackground()
@@ -722,6 +752,15 @@ class CollageEditorViewController: UIViewController {
             }
         }
         
+        // Проверяем, не попали ли в какой-то стикер
+        var hitSticker = false
+        for stickerView in stickerViews {
+            if stickerView.frame.contains(location) {
+                hitSticker = true
+                break
+            }
+        }
+        
         // Проверяем, не попали ли в изображение
         guard let gridContainer = collageView.viewWithTag(gridContainerTag) else { return }
         let locationInGrid = collageView.convert(location, to: gridContainer)
@@ -733,9 +772,10 @@ class CollageEditorViewController: UIViewController {
             }
         }
         
-        // Если не попали ни в текст, ни в изображение, снимаем все выделения
-        if !hitTextLayer && !hitImage {
+        // Если не попали ни в текст, ни в стикер, ни в изображение, снимаем все выделения
+        if !hitTextLayer && !hitSticker && !hitImage {
             deselectAllTextLayers()
+            deselectAllStickers()
             gestureHandlers.forEach { $0.setSelected(false) }
             selectedImageView = nil
         }
@@ -924,6 +964,49 @@ class CollageEditorViewController: UIViewController {
             )
             
             text.draw(in: textRect, withAttributes: attributes)
+            
+            context.restoreGState()
+        }
+        
+        // Рисуем стикеры поверх коллажа
+        for stickerView in stickerViews {
+            context.saveGState()
+            
+            // 1. Вычисляем центр стикера в координатах финального изображения
+            let centerInGrid = collageView.convert(stickerView.center, to: gridContainer)
+            let scaledCenter = CGPoint(
+                x: centerInGrid.x * scale + offsetX,
+                y: centerInGrid.y * scale + offsetY
+            )
+            
+            // 2. Перемещаем контекст в этот центр
+            context.translateBy(x: scaledCenter.x, y: scaledCenter.y)
+            
+            // 3. Применяем трансформацию стикера, отмасштабированную на общий масштаб коллажа
+            let finalTransform = stickerView.transform.scaledBy(x: scale, y: scale)
+            context.concatenate(finalTransform)
+            
+            // 4. Рисуем изображение стикера
+            if let stickerImage = stickerView.subviews.first(where: { $0 is UIImageView }) as? UIImageView,
+               let image = stickerImage.image {
+                
+                // Вычисляем размер стикера с учетом масштаба
+                let stickerSize = stickerView.bounds.size
+                let scaledStickerSize = CGSize(
+                    width: stickerSize.width,
+                    height: stickerSize.height
+                )
+                
+                // Рисуем стикер, центрируя его относительно текущей точки
+                let stickerRect = CGRect(
+                    x: -scaledStickerSize.width / 2,
+                    y: -scaledStickerSize.height / 2,
+                    width: scaledStickerSize.width,
+                    height: scaledStickerSize.height
+                )
+                
+                image.draw(in: stickerRect)
+            }
             
             context.restoreGState()
         }
@@ -1385,6 +1468,93 @@ extension CollageEditorViewController: BorderDragViewDelegate {
                 }
             }
         }
+    }
+}
+
+// MARK: - Stickers
+extension CollageEditorViewController {
+    private func showStickerPicker() {
+        let stickerPicker = StickerPickerViewController()
+        stickerPicker.delegate = self
+        stickerPicker.modalPresentationStyle = .pageSheet
+        
+        if let sheet = stickerPicker.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        
+        present(stickerPicker, animated: true)
+    }
+    
+    private func addStickerView(with image: UIImage) {
+        // Размещаем стикер в центре коллажа
+        let centerX = collageView.bounds.width / 2 - 40
+        let centerY = collageView.bounds.height / 2 - 40
+        
+        let stickerView = StickerView(image: image)
+        stickerView.frame = CGRect(x: centerX, y: centerY, width: 80, height: 80)
+        
+        stickerView.onDelete = { [weak self] in
+            self?.removeStickerView(stickerView)
+        }
+        
+        stickerView.onTap = { [weak self] in
+            self?.selectStickerView(stickerView)
+        }
+        
+        collageView.addSubview(stickerView)
+        stickerViews.append(stickerView)
+        selectStickerView(stickerView)
+        
+        // Убеждаемся, что кнопки остаются доступными
+        ensureButtonsOnTop()
+    }
+    
+    private func selectStickerView(_ stickerView: StickerView) {
+        // Снимаем выделение со всех стикеров
+        stickerViews.forEach { $0.setSelected(false) }
+        
+        // Снимаем выделение с текстовых слоев
+        textLayers.forEach { $0.setSelected(false) }
+        currentTextLayer = nil
+        hideTextEditingPanel()
+        
+        // Снимаем выделение с изображений
+        gestureHandlers.forEach { $0.setSelected(false) }
+        selectedImageView = nil
+        
+        // Выделяем текущий стикер
+        stickerView.setSelected(true)
+        currentStickerView = stickerView
+        
+        // Убеждаемся, что кнопки остаются доступными
+        ensureButtonsOnTop()
+    }
+    
+    private func removeStickerView(_ stickerView: StickerView) {
+        stickerView.removeFromSuperview()
+        if let index = stickerViews.firstIndex(of: stickerView) {
+            stickerViews.remove(at: index)
+        }
+        if currentStickerView == stickerView {
+            currentStickerView = nil
+        }
+        
+        // Убеждаемся, что кнопки остаются доступными
+        ensureButtonsOnTop()
+    }
+    
+    /// Снимает выделение со всех стикеров
+    private func deselectAllStickers() {
+        stickerViews.forEach { $0.setSelected(false) }
+        currentStickerView = nil
+    }
+}
+
+// MARK: - StickerPickerDelegate
+extension CollageEditorViewController: StickerPickerDelegate {
+    func stickerPicker(_ picker: StickerPickerViewController, didSelectSticker image: UIImage) {
+        addStickerView(with: image)
     }
 }
 
