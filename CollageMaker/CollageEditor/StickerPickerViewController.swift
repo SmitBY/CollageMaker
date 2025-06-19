@@ -18,7 +18,6 @@ class StickerPickerViewController: UIViewController {
         
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.backgroundColor = .systemBackground
-        collectionView.register(StickerCell.self, forCellWithReuseIdentifier: StickerCell.identifier)
         return collectionView
     }()
     
@@ -37,8 +36,11 @@ class StickerPickerViewController: UIViewController {
         return button
     }()
     
-    // Массив доступных стикеров (эмодзи и системные иконки)
-    private let availableStickers: [StickerItem] = [
+    // Массив доступных стикеров (будет заполнен динамически)
+    private var availableStickers: [StickerItem] = []
+    
+    // Статический массив эмодзи и системных иконок
+    private let defaultStickers: [StickerItem] = [
         // Эмодзи
         StickerItem(type: .emoji, content: "😀"),
         StickerItem(type: .emoji, content: "😍"),
@@ -94,10 +96,17 @@ class StickerPickerViewController: UIViewController {
         setupActions()
     }
     
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        loadAllStickers()
+    }
+    
     // MARK: - Setup
     private func setupUI() {
         view.backgroundColor = .systemBackground
         
+        // Регистрируем ячейку после создания collectionView
+        collectionView.register(StickerCell.self, forCellWithReuseIdentifier: StickerCell.identifier)
         collectionView.delegate = self
         collectionView.dataSource = self
         
@@ -131,6 +140,50 @@ class StickerPickerViewController: UIViewController {
     @objc private func closeButtonTapped() {
         dismiss(animated: true)
     }
+    
+    // MARK: - Sticker Loading
+    private func loadAllStickers() {
+        var allStickers: [StickerItem] = []
+        
+        // Добавляем стикеры из Assets
+        let assetStickers = loadAssetStickers()
+        allStickers.append(contentsOf: assetStickers)
+        
+        // Добавляем эмодзи и системные иконки
+        allStickers.append(contentsOf: defaultStickers)
+        
+        availableStickers = allStickers
+        collectionView.reloadData()
+    }
+    
+    private func loadAssetStickers() -> [StickerItem] {
+        var assetStickers: [StickerItem] = []
+        
+        // В iOS для доступа к Assets используется имя imageset
+        let assetImageSetNames = [
+            "sticker1", "sticker2", "sticker3", "sticker4", "sticker5"
+        ]
+        
+        // Также пробуем стандартные имена стикеров
+        let standardStickerNames = (6...50).map { "sticker\($0)" }
+        
+        // Объединяем все возможные имена
+        let allPossibleNames = assetImageSetNames + standardStickerNames
+        
+        // Проверяем каждый стикер и добавляем если изображение существует
+        for stickerName in allPossibleNames {
+            if UIImage(named: stickerName) != nil {
+                print("Найден стикер: \(stickerName)")
+                let stickerItem = StickerItem(type: .assetImage, content: stickerName)
+                assetStickers.append(stickerItem)
+            } else {
+                print("Стикер не найден: \(stickerName)")
+            }
+        }
+        
+        print("Загружено \(assetStickers.count) стикеров из Assets")
+        return assetStickers
+    }
 }
 
 // MARK: - UICollectionViewDataSource
@@ -140,7 +193,16 @@ extension StickerPickerViewController: UICollectionViewDataSource {
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: StickerCell.identifier, for: indexPath) as! StickerCell
+        guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: StickerCell.identifier, for: indexPath) as? StickerCell else {
+            print("Ошибка: не удалось создать StickerCell")
+            return UICollectionViewCell()
+        }
+        
+        guard indexPath.item < availableStickers.count else {
+            print("Ошибка: индекс \(indexPath.item) выходит за границы массива размером \(availableStickers.count)")
+            return cell
+        }
+        
         let stickerItem = availableStickers[indexPath.item]
         cell.configure(with: stickerItem)
         return cell
@@ -162,12 +224,8 @@ extension StickerPickerViewController: UICollectionViewDelegate {
 // MARK: - UICollectionViewDelegateFlowLayout
 extension StickerPickerViewController: UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        let itemsPerRow: CGFloat = 4
-        let paddingSpace = 20 * 2 + 10 * (itemsPerRow - 1)
-        let availableWidth = collectionView.frame.width - paddingSpace
-        let widthPerItem = availableWidth / itemsPerRow
-        
-        return CGSize(width: widthPerItem, height: widthPerItem)
+        // Простой фиксированный размер для избежания проблем с расчетами
+        return CGSize(width: 80, height: 80)
     }
 }
 
@@ -176,6 +234,7 @@ struct StickerItem {
     enum StickerType {
         case emoji
         case systemIcon
+        case assetImage
     }
     
     let type: StickerType
@@ -187,6 +246,8 @@ struct StickerItem {
             return generateEmojiImage(emoji: content, size: size)
         case .systemIcon:
             return generateSystemIconImage(iconName: content, size: size)
+        case .assetImage:
+            return UIImage(named: content)
         }
     }
     
@@ -244,7 +305,15 @@ class StickerCell: UICollectionViewCell {
     }
     
     func configure(with stickerItem: StickerItem) {
-        imageView.image = stickerItem.generateImage()
+        if stickerItem.type == .assetImage {
+            // Для файловых стикеров используем оригинальный размер
+            imageView.contentMode = .scaleAspectFit
+            imageView.image = stickerItem.generateImage()
+        } else {
+            // Для эмодзи и иконок используем стандартный размер
+            imageView.contentMode = .scaleAspectFit
+            imageView.image = stickerItem.generateImage()
+        }
     }
     
     override var isSelected: Bool {

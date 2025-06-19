@@ -21,6 +21,7 @@ class PhotoEditorViewController: UIViewController {
     
     // Переменные для обрезки
     private var initialCropFrame: CGRect?
+    private var currentGestureHandle: CropHandleView?
     private var cropMode: CropMode = .move
     private var cropHandles: [CropHandleView] = []
     
@@ -29,6 +30,29 @@ class PhotoEditorViewController: UIViewController {
     private var originalImage: UIImage?
     private var currentFilterType: ImageFiltersManager.FilterType = .none
     private var filterPreviews: [ImageFiltersManager.FilterType: UIImage] = [:]
+    
+    // Форматы изображений
+    enum AspectRatioFormat: String, CaseIterable {
+        case free = "Произвольный"
+        case ultraWide = "19:9"
+        case vertical = "9:16"
+        case portrait = "4:5"
+        case landscape = "5:4"
+        case square = "1:1"
+        
+        var ratio: CGFloat? {
+            switch self {
+            case .free: return nil
+            case .ultraWide: return 19.0/9.0
+            case .vertical: return 9.0/16.0
+            case .portrait: return 4.0/5.0
+            case .landscape: return 5.0/4.0
+            case .square: return 1.0
+            }
+        }
+    }
+    
+    private var currentAspectRatio: AspectRatioFormat = .free
     
     enum CropMode {
         case move
@@ -75,6 +99,22 @@ class PhotoEditorViewController: UIViewController {
         grid.backgroundColor = .clear
         grid.isUserInteractionEnabled = true
         return grid
+    }()
+    
+    /// Коллекция форматов изображений
+    private let aspectRatioCollectionView: UICollectionView = {
+        let layout = UICollectionViewFlowLayout()
+        layout.scrollDirection = .horizontal
+        layout.itemSize = CGSize(width: 80, height: 40)
+        layout.minimumInteritemSpacing = 8
+        layout.minimumLineSpacing = 8
+        layout.sectionInset = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
+        
+        let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        cv.backgroundColor = .clear
+        cv.showsHorizontalScrollIndicator = false
+        cv.register(AspectRatioCell.self, forCellWithReuseIdentifier: AspectRatioCell.identifier)
+        return cv
     }()
     
     /// Коллекция фильтров
@@ -141,6 +181,7 @@ class PhotoEditorViewController: UIViewController {
         setupBindings()
         setupGestureRecognizers()
         setupFiltersCollection()
+        setupAspectRatioCollection()
     }
     
     override func viewDidLayoutSubviews() {
@@ -187,6 +228,14 @@ class PhotoEditorViewController: UIViewController {
         photoContainerView.addSubview(cropGridView)
         cropGridView.snp.makeConstraints { make in
             make.center.equalTo(imageView)
+        }
+        
+        // Добавляем коллекцию форматов изображений
+        view.addSubview(aspectRatioCollectionView)
+        aspectRatioCollectionView.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(20)
+            make.left.right.equalToSuperview()
+            make.height.equalTo(50)
         }
         
         // Добавляем коллекцию фильтров
@@ -327,7 +376,21 @@ class PhotoEditorViewController: UIViewController {
 extension PhotoEditorViewController: UIGestureRecognizerDelegate {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        // Разрешаем одновременное распознавание жестов для разных элементов
+        // Для жестов маркеров обрезки - не разрешаем одновременное выполнение
+        if gestureRecognizer.view is CropHandleView && otherGestureRecognizer.view is CropHandleView {
+            return false
+        }
+        
+        // Для остальных жестов разрешаем одновременное распознавание
+        return true
+    }
+    
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // Если есть активный жест маркера, блокируем другие жесты маркеров
+        if gestureRecognizer.view is CropHandleView && currentGestureHandle != nil {
+            return gestureRecognizer.view === currentGestureHandle
+        }
+        
         return true
     }
 }
@@ -350,6 +413,7 @@ extension PhotoEditorViewController {
             
             // Добавляем жест
             let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleCropHandlePan(_:)))
+            panGesture.delegate = self
             handle.addGestureRecognizer(panGesture)
             print("Created corner handle: \(position)")
         }
@@ -363,6 +427,7 @@ extension PhotoEditorViewController {
             
             // Добавляем жест
             let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleCropHandlePan(_:)))
+            panGesture.delegate = self
             handle.addGestureRecognizer(panGesture)
             print("Created edge handle: \(position)")
         }
@@ -423,11 +488,16 @@ extension PhotoEditorViewController {
         switch gesture.state {
         case .began:
             print("Gesture began on handle: \(handle.position)")
-            initialCropFrame = cropGridView.frame
-            print("Initial crop frame: \(String(describing: initialCropFrame))")
+            // Сохраняем начальное состояние только если нет активного жеста
+            if currentGestureHandle == nil {
+                initialCropFrame = cropGridView.frame
+                currentGestureHandle = handle
+                print("Initial crop frame: \(String(describing: initialCropFrame))")
+            }
             
         case .changed:
-            guard let initialFrame = initialCropFrame else { return }
+            guard let initialFrame = initialCropFrame,
+                  currentGestureHandle == handle else { return }
             
             // Конвертируем initialFrame в координаты view для вычислений
             let initialFrameInView = photoContainerView.convert(initialFrame, to: view)
@@ -437,48 +507,269 @@ extension PhotoEditorViewController {
             case .topLeft:
                 let deltaX = translation.x
                 let deltaY = translation.y
-                newFrameInView.origin.x = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
-                newFrameInView.origin.y = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
-                newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
-                newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
+                
+                if let ratio = currentAspectRatio.ratio {
+                    // Определяем, какое изменение больше
+                    let widthChange = abs(deltaX) / initialFrameInView.width
+                    let heightChange = abs(deltaY) / initialFrameInView.height
+                    
+                    if widthChange >= heightChange {
+                        // Изменяем по ширине
+                        let newX = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
+                        let newWidth = initialFrameInView.maxX - newX
+                        let newHeight = newWidth / ratio
+                        
+                        newFrameInView.origin.x = newX
+                        newFrameInView.size.width = newWidth
+                        newFrameInView.size.height = newHeight
+                        newFrameInView.origin.y = initialFrameInView.maxY - newHeight
+                        
+                        // Проверяем границы по высоте
+                        if newFrameInView.origin.y < imageFrame.origin.y {
+                            newFrameInView.origin.y = imageFrame.origin.y
+                            newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
+                            newFrameInView.size.width = newFrameInView.size.height * ratio
+                            newFrameInView.origin.x = initialFrameInView.maxX - newFrameInView.size.width
+                        }
+                    } else {
+                        // Изменяем по высоте
+                        let newY = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
+                        let newHeight = initialFrameInView.maxY - newY
+                        let newWidth = newHeight * ratio
+                        
+                        newFrameInView.origin.y = newY
+                        newFrameInView.size.height = newHeight
+                        newFrameInView.size.width = newWidth
+                        newFrameInView.origin.x = initialFrameInView.maxX - newWidth
+                        
+                        // Проверяем границы по ширине
+                        if newFrameInView.origin.x < imageFrame.origin.x {
+                            newFrameInView.origin.x = imageFrame.origin.x
+                            newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
+                            newFrameInView.size.height = newFrameInView.size.width / ratio
+                            newFrameInView.origin.y = initialFrameInView.maxY - newFrameInView.size.height
+                        }
+                    }
+                } else {
+                    // Произвольный формат
+                    newFrameInView.origin.x = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
+                    newFrameInView.origin.y = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
+                    newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
+                    newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
+                }
                 
             case .topRight:
                 let deltaX = translation.x
                 let deltaY = translation.y
-                newFrameInView.origin.y = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
-                newFrameInView.size.width = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
-                newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
+                
+                if let ratio = currentAspectRatio.ratio {
+                    // Сохраняем соотношение сторон
+                    let newY = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
+                    let newWidth = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
+                    let newHeight = initialFrameInView.maxY - newY
+                    
+                    // Определяем ограничивающий фактор
+                    let widthBasedHeight = newWidth / ratio
+                    let heightBasedWidth = newHeight * ratio
+                    
+                    if widthBasedHeight <= newHeight {
+                        // Ограничиваем по ширине
+                        newFrameInView.size.width = newWidth
+                        newFrameInView.size.height = widthBasedHeight
+                        newFrameInView.origin.y = initialFrameInView.maxY - newFrameInView.size.height
+                    } else {
+                        // Ограничиваем по высоте
+                        newFrameInView.origin.y = newY
+                        newFrameInView.size.height = newHeight
+                        newFrameInView.size.width = heightBasedWidth
+                    }
+                } else {
+                    // Произвольный формат
+                    newFrameInView.origin.y = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
+                    newFrameInView.size.width = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
+                    newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
+                }
                 
             case .bottomLeft:
                 let deltaX = translation.x
                 let deltaY = translation.y
-                newFrameInView.origin.x = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
-                newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
-                newFrameInView.size.height = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
+                
+                if let ratio = currentAspectRatio.ratio {
+                    // Сохраняем соотношение сторон
+                    let newX = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
+                    let newWidth = initialFrameInView.maxX - newX
+                    let newHeight = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
+                    
+                    // Определяем ограничивающий фактор
+                    let widthBasedHeight = newWidth / ratio
+                    let heightBasedWidth = newHeight * ratio
+                    
+                    if widthBasedHeight <= newHeight {
+                        // Ограничиваем по ширине
+                        newFrameInView.origin.x = newX
+                        newFrameInView.size.width = newWidth
+                        newFrameInView.size.height = widthBasedHeight
+                    } else {
+                        // Ограничиваем по высоте
+                        newFrameInView.size.height = newHeight
+                        newFrameInView.size.width = heightBasedWidth
+                        newFrameInView.origin.x = initialFrameInView.maxX - newFrameInView.size.width
+                    }
+                } else {
+                    // Произвольный формат
+                    newFrameInView.origin.x = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
+                    newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
+                    newFrameInView.size.height = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
+                }
                 
             case .bottomRight:
                 let deltaX = translation.x
                 let deltaY = translation.y
-                newFrameInView.size.width = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
-                newFrameInView.size.height = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
+                
+                if let ratio = currentAspectRatio.ratio {
+                    // Сохраняем соотношение сторон - используем наибольшее изменение
+                    let potentialWidth = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
+                    let potentialHeight = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
+                    
+                    // Определяем, какое изменение больше относительно исходного размера
+                    let widthChange = abs(deltaX) / initialFrameInView.width
+                    let heightChange = abs(deltaY) / initialFrameInView.height
+                    
+                    if widthChange >= heightChange {
+                        // Изменяем по ширине, высота следует за соотношением
+                        newFrameInView.size.width = potentialWidth
+                        newFrameInView.size.height = potentialWidth / ratio
+                        
+                        // Проверяем границы по высоте
+                        if newFrameInView.size.height > imageFrame.maxY - initialFrameInView.origin.y {
+                            newFrameInView.size.height = imageFrame.maxY - initialFrameInView.origin.y
+                            newFrameInView.size.width = newFrameInView.size.height * ratio
+                        }
+                    } else {
+                        // Изменяем по высоте, ширина следует за соотношением
+                        newFrameInView.size.height = potentialHeight
+                        newFrameInView.size.width = potentialHeight * ratio
+                        
+                        // Проверяем границы по ширине
+                        if newFrameInView.size.width > imageFrame.maxX - initialFrameInView.origin.x {
+                            newFrameInView.size.width = imageFrame.maxX - initialFrameInView.origin.x
+                            newFrameInView.size.height = newFrameInView.size.width / ratio
+                        }
+                    }
+                } else {
+                    // Произвольный формат
+                    newFrameInView.size.width = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
+                    newFrameInView.size.height = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
+                }
                 
             case .left:
                 let deltaX = translation.x
-                newFrameInView.origin.x = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
-                newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
+                
+                if let ratio = currentAspectRatio.ratio {
+                    // При фиксированном соотношении сторон боковые маркеры изменяют размер пропорционально
+                    let newX = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
+                    let newWidth = initialFrameInView.maxX - newX
+                    let newHeight = newWidth / ratio
+                    
+                    // Проверяем, что новая высота помещается в границы изображения
+                    let maxHeight = imageFrame.height
+                    if newHeight <= maxHeight {
+                        newFrameInView.origin.x = newX
+                        newFrameInView.size.width = newWidth
+                        newFrameInView.size.height = newHeight
+                        // Центрируем по вертикали относительно изображения
+                        let centerY = imageFrame.midY
+                        newFrameInView.origin.y = centerY - newHeight / 2
+                        
+                        // Корректируем если выходим за границы
+                        if newFrameInView.origin.y < imageFrame.origin.y {
+                            newFrameInView.origin.y = imageFrame.origin.y
+                        } else if newFrameInView.maxY > imageFrame.maxY {
+                            newFrameInView.origin.y = imageFrame.maxY - newHeight
+                        }
+                    } else {
+                        // Ограничиваем по высоте
+                        newFrameInView.size.height = maxHeight
+                        newFrameInView.size.width = maxHeight * ratio
+                        newFrameInView.origin.x = initialFrameInView.maxX - newFrameInView.size.width
+                        newFrameInView.origin.y = imageFrame.origin.y
+                    }
+                } else {
+                    // Произвольный формат
+                    newFrameInView.origin.x = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
+                    newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
+                }
                 
             case .right:
                 let deltaX = translation.x
-                newFrameInView.size.width = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
+                
+                if let ratio = currentAspectRatio.ratio {
+                    // При фиксированном соотношении сторон боковые маркеры изменяют размер пропорционально
+                    let newWidth = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
+                    let newHeight = newWidth / ratio
+                    
+                    // Проверяем, что новая высота помещается в границы изображения
+                    let maxHeight = imageFrame.height
+                    if newHeight <= maxHeight {
+                        newFrameInView.size.width = newWidth
+                        newFrameInView.size.height = newHeight
+                        // Центрируем по вертикали относительно изображения
+                        let centerY = imageFrame.midY
+                        newFrameInView.origin.y = centerY - newHeight / 2
+                        
+                        // Корректируем если выходим за границы
+                        if newFrameInView.origin.y < imageFrame.origin.y {
+                            newFrameInView.origin.y = imageFrame.origin.y
+                        } else if newFrameInView.maxY > imageFrame.maxY {
+                            newFrameInView.origin.y = imageFrame.maxY - newHeight
+                        }
+                    } else {
+                        // Ограничиваем по высоте
+                        newFrameInView.size.height = maxHeight
+                        newFrameInView.size.width = maxHeight * ratio
+                        newFrameInView.origin.y = imageFrame.origin.y
+                    }
+                } else {
+                    // Произвольный формат
+                    newFrameInView.size.width = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
+                }
                 
             case .top:
                 let deltaY = translation.y
-                newFrameInView.origin.y = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
-                newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
+                
+                if let ratio = currentAspectRatio.ratio {
+                    // При фиксированном соотношении сторон верхние/нижние маркеры изменяют размер пропорционально
+                    let newY = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
+                    let newHeight = initialFrameInView.maxY - newY
+                    let newWidth = newHeight * ratio
+                    
+                    newFrameInView.origin.y = newY
+                    newFrameInView.size.height = newHeight
+                    newFrameInView.size.width = newWidth
+                    // Центрируем по горизонтали
+                    newFrameInView.origin.x = initialFrameInView.midX - newWidth / 2
+                } else {
+                    // Произвольный формат
+                    newFrameInView.origin.y = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
+                    newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
+                }
                 
             case .bottom:
                 let deltaY = translation.y
-                newFrameInView.size.height = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
+                
+                if let ratio = currentAspectRatio.ratio {
+                    // При фиксированном соотношении сторон верхние/нижние маркеры изменяют размер пропорционально
+                    let newHeight = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
+                    let newWidth = newHeight * ratio
+                    
+                    newFrameInView.size.height = newHeight
+                    newFrameInView.size.width = newWidth
+                    // Центрируем по горизонтали
+                    newFrameInView.origin.x = initialFrameInView.midX - newWidth / 2
+                } else {
+                    // Произвольный формат
+                    newFrameInView.size.height = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
+                }
             }
             
             // Конвертируем обратно в координаты photoContainerView
@@ -490,7 +781,11 @@ extension PhotoEditorViewController {
             updateCropHandlesPositions()
             
         case .ended, .cancelled:
-            initialCropFrame = nil
+            // Сбрасываем состояние только для текущего активного жеста
+            if currentGestureHandle == handle {
+                initialCropFrame = nil
+                currentGestureHandle = nil
+            }
             
         default:
             break
@@ -618,30 +913,107 @@ extension PhotoEditorViewController {
     }
 }
 
+// MARK: - Aspect Ratio
+extension PhotoEditorViewController {
+    private func setupAspectRatioCollection() {
+        aspectRatioCollectionView.delegate = self
+        aspectRatioCollectionView.dataSource = self
+    }
+    
+    private func applyAspectRatio(_ format: AspectRatioFormat) {
+        currentAspectRatio = format
+        
+        // Сбрасываем активные жесты при смене формата
+        initialCropFrame = nil
+        currentGestureHandle = nil
+        
+        guard let ratio = format.ratio else {
+            // Произвольный формат - не изменяем размер
+            return
+        }
+        
+        // Получаем текущий размер изображения в photoContainerView
+        let containerSize = photoContainerView.bounds.size
+        let availableWidth = containerSize.width
+        let availableHeight = containerSize.height
+        
+        var newWidth: CGFloat
+        var newHeight: CGFloat
+        
+        // Вычисляем новые размеры с учетом соотношения сторон
+        if ratio > 1.0 {
+            // Ландшафтная ориентация (ширина больше высоты)
+            newWidth = min(availableWidth, availableHeight * ratio)
+            newHeight = newWidth / ratio
+        } else {
+            // Портретная ориентация или квадрат (высота больше или равна ширине)
+            newHeight = min(availableHeight, availableWidth / ratio)
+            newWidth = newHeight * ratio
+        }
+        
+        // Обновляем размер cropGridView
+        cropGridView.snp.remakeConstraints { make in
+            make.center.equalTo(imageView)
+            make.width.equalTo(newWidth)
+            make.height.equalTo(newHeight)
+        }
+        
+        UIView.animate(withDuration: 0.3) {
+            self.view.layoutIfNeeded()
+        } completion: { _ in
+            // Обновляем позиции маркеров после анимации
+            self.updateCropHandlesPositions()
+            
+            // Обновляем cropOverlayView
+            let cropRectInView = self.photoContainerView.convert(self.cropGridView.frame, to: self.view)
+            self.cropOverlayView.cropRect = cropRectInView
+        }
+    }
+}
+
 // MARK: - UICollectionViewDataSource
 extension PhotoEditorViewController: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return ImageFiltersManager.FilterType.allCases.count
+        if collectionView == aspectRatioCollectionView {
+            return AspectRatioFormat.allCases.count
+        } else {
+            return ImageFiltersManager.FilterType.allCases.count
+        }
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: FilterCollectionViewCell.identifier, for: indexPath) as! FilterCollectionViewCell
-        
-        let filterType = ImageFiltersManager.FilterType.allCases[indexPath.item]
-        let previewImage = filterPreviews[filterType]
-        
-        cell.configure(with: previewImage, title: filterType.displayName)
-        cell.isSelected = (filterType == currentFilterType)
-        
-        return cell
+        if collectionView == aspectRatioCollectionView {
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: AspectRatioCell.identifier, for: indexPath) as! AspectRatioCell
+            
+            let format = AspectRatioFormat.allCases[indexPath.item]
+            cell.configure(with: format, isSelected: format == currentAspectRatio)
+            
+            return cell
+        } else {
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: FilterCollectionViewCell.identifier, for: indexPath) as! FilterCollectionViewCell
+            
+            let filterType = ImageFiltersManager.FilterType.allCases[indexPath.item]
+            let previewImage = filterPreviews[filterType]
+            
+            cell.configure(with: previewImage, title: filterType.displayName)
+            cell.isSelected = (filterType == currentFilterType)
+            
+            return cell
+        }
     }
 }
 
 // MARK: - UICollectionViewDelegate
 extension PhotoEditorViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        let filterType = ImageFiltersManager.FilterType.allCases[indexPath.item]
-        applyFilter(filterType)
-        collectionView.reloadData() // Обновляем выделение
+        if collectionView == aspectRatioCollectionView {
+            let format = AspectRatioFormat.allCases[indexPath.item]
+            applyAspectRatio(format)
+            collectionView.reloadData() // Обновляем выделение
+        } else {
+            let filterType = ImageFiltersManager.FilterType.allCases[indexPath.item]
+            applyFilter(filterType)
+            collectionView.reloadData() // Обновляем выделение
+        }
     }
 }
