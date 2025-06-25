@@ -15,25 +15,39 @@ class CropOverlayView: UIView {
     }
     
     override func draw(_ rect: CGRect) {
+        // Проверяем, что cropRect валиден
+        guard cropRect.width > 0 && cropRect.height > 0 && rect.contains(cropRect) else {
+            print("[CropOverlay] Invalid cropRect: \(cropRect) in bounds: \(rect)")
+            return
+        }
+        
         // Рисуем затемнение только вне cropRect.
         let overlayColor = UIColor.black.withAlphaComponent(0.8)
         overlayColor.setFill()
         
         // Верхняя область.
-        let topRect = CGRect(x: 0, y: 0, width: rect.width, height: cropRect.minY)
-        UIRectFill(topRect)
+        if cropRect.minY > 0 {
+            let topRect = CGRect(x: 0, y: 0, width: rect.width, height: cropRect.minY)
+            UIRectFill(topRect)
+        }
         
         // Нижняя область.
-        let bottomRect = CGRect(x: 0, y: cropRect.maxY, width: rect.width, height: rect.height - cropRect.maxY)
-        UIRectFill(bottomRect)
+        if cropRect.maxY < rect.height {
+            let bottomRect = CGRect(x: 0, y: cropRect.maxY, width: rect.width, height: rect.height - cropRect.maxY)
+            UIRectFill(bottomRect)
+        }
         
         // Левая область.
-        let leftRect = CGRect(x: 0, y: cropRect.minY, width: cropRect.minX, height: cropRect.height)
-        UIRectFill(leftRect)
+        if cropRect.minX > 0 {
+            let leftRect = CGRect(x: 0, y: cropRect.minY, width: cropRect.minX, height: cropRect.height)
+            UIRectFill(leftRect)
+        }
         
         // Правая область.
-        let rightRect = CGRect(x: cropRect.maxX, y: cropRect.minY, width: rect.width - cropRect.maxX, height: cropRect.height)
-        UIRectFill(rightRect)
+        if cropRect.maxX < rect.width {
+            let rightRect = CGRect(x: cropRect.maxX, y: cropRect.minY, width: rect.width - cropRect.maxX, height: cropRect.height)
+            UIRectFill(rightRect)
+        }
         
         // Отрисовываем белую рамку вокруг cropRect.
         let borderPath = UIBezierPath(rect: cropRect)

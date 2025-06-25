@@ -9,6 +9,19 @@ class CropHandleView: UIView {
     enum Position {
         case topLeft, topRight, bottomLeft, bottomRight
         case top, bottom, left, right
+        
+        var debugDescription: String {
+            switch self {
+            case .topLeft: return "topLeft"
+            case .topRight: return "topRight" 
+            case .bottomLeft: return "bottomLeft"
+            case .bottomRight: return "bottomRight"
+            case .top: return "top"
+            case .bottom: return "bottom"
+            case .left: return "left"
+            case .right: return "right"
+            }
+        }
     }
     
     let handleType: HandleType
