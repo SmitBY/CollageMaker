@@ -25,6 +25,12 @@ class PhotoEditorViewController: UIViewController {
     private var cropMode: CropMode = .move
     private var cropHandles: [CropHandleView] = []
     
+    // Переменные для перетягивания кропа
+    private var isDraggingCrop = false
+    private var cropDragStartFrame: CGRect?
+    private var lastBoundaryFeedbackTime: TimeInterval = 0
+    private var isUpdatingHandlePositions = false
+    
     // Фильтры
     private let filtersManager = ImageFiltersManager()
     private var originalImage: UIImage?
@@ -99,6 +105,56 @@ class PhotoEditorViewController: UIViewController {
         grid.backgroundColor = .clear
         grid.isUserInteractionEnabled = true
         return grid
+    }()
+    
+    /// Невидимая область для перетягивания всей кроп-области
+    private let cropDragView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = true
+        
+        // Добавляем визуальный индикатор перетягивания
+        let dragIndicator = UIView()
+        dragIndicator.backgroundColor = UIColor.white.withAlphaComponent(0.3)
+        dragIndicator.layer.cornerRadius = 4
+        dragIndicator.layer.borderWidth = 1
+        dragIndicator.layer.borderColor = UIColor.white.withAlphaComponent(0.5).cgColor
+        dragIndicator.isUserInteractionEnabled = false
+        
+        view.addSubview(dragIndicator)
+        dragIndicator.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            dragIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            dragIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            dragIndicator.widthAnchor.constraint(equalToConstant: 30),
+            dragIndicator.heightAnchor.constraint(equalToConstant: 30)
+        ])
+        
+        // Добавляем четыре точки для индикации перетягивания
+        let dotSize: CGFloat = 4
+        let spacing: CGFloat = 6
+        
+        for i in 0..<4 {
+            let dot = UIView()
+            dot.backgroundColor = UIColor.white.withAlphaComponent(0.8)
+            dot.layer.cornerRadius = dotSize / 2
+            dot.isUserInteractionEnabled = false
+            
+            dragIndicator.addSubview(dot)
+            dot.translatesAutoresizingMaskIntoConstraints = false
+            
+            let xOffset = (i % 2 == 0) ? -spacing/2 : spacing/2
+            let yOffset = (i < 2) ? -spacing/2 : spacing/2
+            
+            NSLayoutConstraint.activate([
+                dot.centerXAnchor.constraint(equalTo: dragIndicator.centerXAnchor, constant: xOffset),
+                dot.centerYAnchor.constraint(equalTo: dragIndicator.centerYAnchor, constant: yOffset),
+                dot.widthAnchor.constraint(equalToConstant: dotSize),
+                dot.heightAnchor.constraint(equalToConstant: dotSize)
+            ])
+        }
+        
+        return view
     }()
     
     /// Коллекция форматов изображений
@@ -230,6 +286,14 @@ class PhotoEditorViewController: UIViewController {
             make.center.equalTo(imageView)
         }
         
+        // Добавляем невидимую область для перетягивания кропа (только центральная часть)
+        photoContainerView.addSubview(cropDragView)
+        cropDragView.snp.makeConstraints { make in
+            make.center.equalTo(cropGridView)
+            make.width.equalTo(cropGridView).offset(-60) // Оставляем 30px с каждой стороны для хендлов
+            make.height.equalTo(cropGridView).offset(-60) // Оставляем 30px сверху и снизу для хендлов
+        }
+        
         // Добавляем коллекцию форматов изображений
         view.addSubview(aspectRatioCollectionView)
         aspectRatioCollectionView.snp.makeConstraints { make in
@@ -265,15 +329,32 @@ class PhotoEditorViewController: UIViewController {
         print("PhotoContainer bounds: \(photoContainerView.bounds)")
         print("Visible image rect: \(visibleImageRect)")
         
+        // Проверяем, что видимая область имеет валидные размеры
+        guard visibleImageRect.width > 0 && visibleImageRect.height > 0 else {
+            print("Warning: Invalid visible image rect: \(visibleImageRect)")
+            return
+        }
+        
+        // Ограничиваем размеры рамки кропа границами изображения
+        let maxWidth = min(visibleImageRect.width, imageView.frame.width)
+        let maxHeight = min(visibleImageRect.height, imageView.frame.height)
+        
         // Устанавливаем размер через SnapKit
         cropGridView.snp.remakeConstraints { make in
             make.center.equalTo(imageView)
-            make.width.equalTo(visibleImageRect.width)
-            make.height.equalTo(visibleImageRect.height)
+            make.width.equalTo(maxWidth)
+            make.height.equalTo(maxHeight)
         }
         
         view.layoutIfNeeded()
         print("CropGridView frame set to: \(cropGridView.frame)")
+        
+        // Проверяем, что финальная рамка не выходит за границы
+        let finalFrame = cropGridView.frame
+        let imageFrame = imageView.frame
+        if !imageFrame.contains(finalFrame) {
+            print("Warning: CropGrid frame \(finalFrame) exceeds image frame \(imageFrame)")
+        }
     }
     
     // MARK: - Bindings
@@ -351,6 +432,11 @@ class PhotoEditorViewController: UIViewController {
         imageView.addGestureRecognizer(pinchGesture)
         imageView.addGestureRecognizer(rotationGesture)
         
+        // Добавляем жест перетягивания для cropDragView
+        let cropDragGesture = UIPanGestureRecognizer(target: self, action: #selector(handleCropDrag(_:)))
+        cropDragGesture.delegate = self
+        cropDragView.addGestureRecognizer(cropDragGesture)
+        
         // Жесты теперь обрабатываются отдельными маркерами
     }
     
@@ -371,6 +457,98 @@ class PhotoEditorViewController: UIViewController {
         }
     }
     
+    @objc private func handleCropDrag(_ gesture: UIPanGestureRecognizer) {
+        // Проверяем, что перетягивание доступно
+        guard cropDragView.isUserInteractionEnabled else {
+            print("Crop drag disabled - crop too small")
+            return
+        }
+        
+        let translation = gesture.translation(in: photoContainerView)
+        
+        // Получаем актуальные границы изображения с учетом трансформаций
+        let imageViewBounds = imageView.bounds
+        let actualImageFrame = photoContainerView.convert(imageViewBounds, from: imageView)
+        
+        switch gesture.state {
+        case .began:
+            print("Crop drag began")
+            isDraggingCrop = true
+            cropDragStartFrame = cropGridView.frame
+            debugCropState()
+            
+            // Анимируем увеличение индикатора при начале перетягивания
+            UIView.animate(withDuration: 0.2) {
+                self.cropDragView.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
+                self.cropDragView.alpha = 0.8
+            }
+            
+        case .changed:
+            guard let startFrame = cropDragStartFrame else { return }
+            
+            // Вычисляем новую позицию кропа
+            var newFrame = startFrame
+            newFrame.origin.x = startFrame.origin.x + translation.x
+            newFrame.origin.y = startFrame.origin.y + translation.y
+            
+            // Дополнительная проверка границ изображения
+            guard actualImageFrame.width > 0 && actualImageFrame.height > 0 else {
+                print("[Crop Drag] Invalid image frame: \(actualImageFrame)")
+                return
+            }
+            
+            // Ограничиваем новую позицию границами изображения
+            let constrainedFrame = validateAndConstrainCropFrame(newFrame, withinImageFrame: actualImageFrame)
+            
+            // Проверяем, была ли позиция ограничена (для обратной связи)
+            let wasConstrained = constrainedFrame != newFrame
+            if wasConstrained {
+                print("[Crop Drag] Position constrained: attempted \(newFrame), result \(constrainedFrame)")
+                
+                // Визуальная обратная связь при достижении границ
+                provideBoundaryFeedback()
+            }
+            
+            // Обновляем позицию cropGridView
+            cropGridView.snp.remakeConstraints { make in
+                make.left.equalTo(photoContainerView).offset(constrainedFrame.origin.x)
+                make.top.equalTo(photoContainerView).offset(constrainedFrame.origin.y)
+                make.width.equalTo(constrainedFrame.width)
+                make.height.equalTo(constrainedFrame.height)
+            }
+            
+            // Принудительно обновляем layout
+            view.layoutIfNeeded()
+            
+            // Обновляем cropDragView чтобы он следовал за cropGridView
+            cropDragView.snp.remakeConstraints { make in
+                make.edges.equalTo(cropGridView)
+            }
+            
+            // Обновляем CropOverlayView
+            let cropRectInView = photoContainerView.convert(cropGridView.frame, to: view)
+            cropOverlayView.cropRect = cropRectInView
+            
+            // Обновляем позиции хендлов
+            updateCropHandlesPositions()
+            
+        case .ended, .cancelled:
+            print("Crop drag ended")
+            isDraggingCrop = false
+            cropDragStartFrame = nil
+            lastBoundaryFeedbackTime = 0 // Сбрасываем таймер обратной связи
+            
+            // Анимируем возврат индикатора к исходному размеру
+            UIView.animate(withDuration: 0.2) {
+                self.cropDragView.transform = CGAffineTransform.identity
+                self.cropDragView.alpha = 1.0
+            }
+            
+        default:
+            break
+        }
+    }
+    
     // Старый метод обработки жестов удален - теперь используем отдельные маркеры
 }
 
@@ -383,6 +561,12 @@ extension PhotoEditorViewController: UIGestureRecognizerDelegate {
             return false
         }
         
+        // Не разрешаем одновременное выполнение жеста перетягивания кропа с жестами маркеров
+        if (gestureRecognizer.view === cropDragView && otherGestureRecognizer.view is CropHandleView) ||
+           (gestureRecognizer.view is CropHandleView && otherGestureRecognizer.view === cropDragView) {
+            return false
+        }
+        
         // Для остальных жестов разрешаем одновременное распознавание
         return true
     }
@@ -391,6 +575,16 @@ extension PhotoEditorViewController: UIGestureRecognizerDelegate {
         // Если есть активный жест маркера, блокируем другие жесты маркеров
         if gestureRecognizer.view is CropHandleView && currentGestureHandle != nil {
             return gestureRecognizer.view === currentGestureHandle
+        }
+        
+        // Если перетягиваем кроп, блокируем жесты маркеров
+        if gestureRecognizer.view is CropHandleView && isDraggingCrop {
+            return false
+        }
+        
+        // Если есть активный жест маркера, блокируем перетягивание кропа
+        if gestureRecognizer.view === cropDragView && currentGestureHandle != nil {
+            return false
         }
         
         return true
@@ -436,27 +630,140 @@ extension PhotoEditorViewController {
         
         print("Total handles created: \(cropHandles.count)")
         
-        // Позиционируем маркеры
-        updateCropHandlesPositions()
+        // Проверяем, что cropGridView имеет валидный фрейм перед позиционированием хендлов
+        DispatchQueue.main.async {
+            // Даем время Auto Layout для вычисления позиций
+            if self.cropGridView.frame.width > 0 && self.cropGridView.frame.height > 0 {
+                self.updateCropHandlesPositions()
+            } else {
+                print("Warning: CropGridView has invalid frame, delaying handle positioning")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.updateCropHandlesPositions()
+                }
+            }
+        }
     }
     
-    private func updateCropHandlesPositions() {
-        let cropFrame = cropGridView.frame
-        let offset: CGFloat = 15 // Смещение маркеров от края рамки
+    /// Валидирует и корректирует фрейм кропа, чтобы он не выходил за границы изображения
+    private func validateAndConstrainCropFrame(_ frame: CGRect, withinImageFrame imageFrame: CGRect) -> CGRect {
+        let minSize: CGFloat = 50.0
         
-        // Проверяем что рамка имеет нормальные размеры
+        // Проверяем, что imageFrame валиден
+        guard imageFrame.width > 0 && imageFrame.height > 0 else {
+            print("[Frame Validation] Invalid image frame: \(imageFrame)")
+            return frame
+        }
+        
+        // Ограничиваем размеры минимальными и максимальными значениями
+        let validWidth = max(minSize, min(frame.width, imageFrame.width))
+        let validHeight = max(minSize, min(frame.height, imageFrame.height))
+        
+        // Ограничиваем позицию границами изображения с учетом размеров кропа
+        let validX = max(imageFrame.minX, min(frame.origin.x, imageFrame.maxX - validWidth))
+        let validY = max(imageFrame.minY, min(frame.origin.y, imageFrame.maxY - validHeight))
+        
+        let validFrame = CGRect(x: validX, y: validY, width: validWidth, height: validHeight)
+        
+        // Дополнительная проверка: убеждаемся, что весь кроп находится внутри изображения
+        let containedFrame = CGRect(
+            x: max(imageFrame.minX, min(validFrame.minX, imageFrame.maxX - validFrame.width)),
+            y: max(imageFrame.minY, min(validFrame.minY, imageFrame.maxY - validFrame.height)),
+            width: min(validFrame.width, imageFrame.width),
+            height: min(validFrame.height, imageFrame.height)
+        )
+        
+        if containedFrame != frame {
+            print("[Frame Validation] Corrected frame from \(frame) to \(containedFrame)")
+            print("[Frame Validation] Image bounds: \(imageFrame)")
+            print("[Frame Validation] Corrections applied:")
+            if containedFrame.origin.x != frame.origin.x {
+                print("  - X position: \(frame.origin.x) → \(containedFrame.origin.x)")
+            }
+            if containedFrame.origin.y != frame.origin.y {
+                print("  - Y position: \(frame.origin.y) → \(containedFrame.origin.y)")
+            }
+            if containedFrame.width != frame.width {
+                print("  - Width: \(frame.width) → \(containedFrame.width)")
+            }
+            if containedFrame.height != frame.height {
+                print("  - Height: \(frame.height) → \(containedFrame.height)")
+            }
+        }
+        
+        return containedFrame
+    }
+    
+    /// Отладочный метод для проверки состояния кропа
+    private func debugCropState() {
+        let cropFrame = cropGridView.frame
+        let imageFrame = imageView.frame
+        let containerBounds = photoContainerView.bounds
+        
+        print("=== CROP DEBUG STATE ===")
+        print("CropGrid frame: \(cropFrame)")
+        print("ImageView frame: \(imageFrame)")
+        print("Container bounds: \(containerBounds)")
+        print("Handles count: \(cropHandles.count)")
+        print("Active gesture handle: \(currentGestureHandle?.position.debugDescription ?? "none")")
+        print("Is dragging crop: \(isDraggingCrop)")
+        print("Crop drag start frame: \(String(describing: cropDragStartFrame))")
+        
+        // Проверяем текущие позиции хендлов
+        for handle in cropHandles {
+            print("Handle \(handle.position.debugDescription) at: \(handle.center)")
+        }
+        
+        // Проверяем cropFrameInView
+        let cropFrameInView = photoContainerView.convert(cropFrame, to: view)
+        print("CropFrame in view coordinates: \(cropFrameInView)")
+        print("========================")
+    }
+    
+    /// Предоставляет визуальную обратную связь при достижении границ изображения
+    private func provideBoundaryFeedback() {
+        let currentTime = Date().timeIntervalSince1970
+        
+        // Ограничиваем частоту тактильной обратной связи (не чаще чем раз в 0.2 секунды)
+        if currentTime - lastBoundaryFeedbackTime > 0.2 {
+            // Легкая вибрация для тактильной обратной связи
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
+            lastBoundaryFeedbackTime = currentTime
+            
+            print("[Boundary Feedback] Haptic feedback provided")
+        }
+        
+        // Кратковременная анимация cropDragView для визуальной обратной связи
+        UIView.animate(withDuration: 0.1, animations: {
+            self.cropDragView.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+        }) { _ in
+            UIView.animate(withDuration: 0.1) {
+                self.cropDragView.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
+            }
+        }
+    }
+    
+    /// Принудительно переставляет хендлы на правильные позиции
+    private func repositionHandlesDirectly() {
+        let cropFrame = cropGridView.frame
+        let offset: CGFloat = 15
+        
         guard cropFrame.width > 0 && cropFrame.height > 0 else {
-            print("cropFrame is empty: \(cropFrame)")
+            print("Cannot reposition handles - invalid crop frame: \(cropFrame)")
             return
         }
         
-        // Конвертируем координаты cropGridView в координаты главного view
         let cropFrameInView = photoContainerView.convert(cropFrame, to: view)
-        print("Updating handle positions for cropFrame: \(cropFrame), in view: \(cropFrameInView)")
-        // Проверка границ для отладки
-        if cropFrameInView.maxX > view.bounds.width || cropFrameInView.maxY > view.bounds.height {
-            print("[Handle Debug] CropFrame exceeds view bounds: \(cropFrameInView)")
-        }
+        print("🔄 Repositioning handles based on cropFrameInView: \(cropFrameInView)")
+        
+        // Получаем границы основного view с учетом safe area
+        let safeArea = view.safeAreaInsets
+        let viewBounds = CGRect(
+            x: safeArea.left,
+            y: safeArea.top,
+            width: view.bounds.width - safeArea.left - safeArea.right,
+            height: view.bounds.height - safeArea.top - safeArea.bottom
+        )
         
         for handle in cropHandles {
             var targetCenter: CGPoint
@@ -480,8 +787,156 @@ extension PhotoEditorViewController {
                 targetCenter = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.midY)
             }
             
-            handle.center = targetCenter
-            print("Handle \(handle.position) positioned at: \(handle.center) (calculated: \(targetCenter))")
+            // Ограничиваем позицию хендла границами view
+            let handleSize = handle.frame.size
+            let minX = viewBounds.minX + handleSize.width / 2
+            let maxX = viewBounds.maxX - handleSize.width / 2
+            let minY = viewBounds.minY + handleSize.height / 2
+            let maxY = viewBounds.maxY - handleSize.height / 2
+            
+            let constrainedCenter = CGPoint(
+                x: max(minX, min(maxX, targetCenter.x)),
+                y: max(minY, min(maxY, targetCenter.y))
+            )
+            
+            // Принудительно обновляем позицию хендла
+            handle.center = constrainedCenter
+            print("🔄 Fixed handle \(handle.position.debugDescription) at: \(constrainedCenter)")
+        }
+    }
+    
+    private func updateCropHandlesPositions() {
+        // Предотвращаем множественные одновременные обновления
+        guard !isUpdatingHandlePositions else {
+            print("⚠️ Skipping handle update - already in progress")
+            return
+        }
+        
+        isUpdatingHandlePositions = true
+        defer { isUpdatingHandlePositions = false }
+        
+        let cropFrame = cropGridView.frame
+        let offset: CGFloat = 15 // Смещение маркеров от края рамки
+        
+        // Проверяем что рамка имеет нормальные размеры
+        guard cropFrame.width > 0 && cropFrame.height > 0 else {
+            print("cropFrame is empty: \(cropFrame)")
+            return
+        }
+        
+        // Конвертируем координаты cropGridView в координаты главного view
+        let cropFrameInView = photoContainerView.convert(cropFrame, to: view)
+        print("Updating handle positions for cropFrame: \(cropFrame), in view: \(cropFrameInView)")
+        
+        // Дополнительная проверка согласованности размеров
+        let expectedWidth = cropFrameInView.width
+        let expectedHeight = cropFrameInView.height
+        print("Expected crop size: \(expectedWidth) x \(expectedHeight)")
+        
+        // Ожидаемый размах хендлов (crop + offset с каждой стороны)
+        let expectedHandleSpreadWidth = expectedWidth + (offset * 2)
+        let expectedHandleSpreadHeight = expectedHeight + (offset * 2)
+        print("Expected handle spread: \(expectedHandleSpreadWidth) x \(expectedHandleSpreadHeight)")
+        
+        // Получаем границы основного view с учетом safe area
+        let safeArea = view.safeAreaInsets
+        let viewBounds = CGRect(
+            x: safeArea.left,
+            y: safeArea.top,
+            width: view.bounds.width - safeArea.left - safeArea.right,
+            height: view.bounds.height - safeArea.top - safeArea.bottom
+        )
+        
+        for handle in cropHandles {
+            var targetCenter: CGPoint
+            
+            switch handle.position {
+            case .topLeft:
+                targetCenter = CGPoint(x: cropFrameInView.minX - offset, y: cropFrameInView.minY - offset)
+            case .topRight:
+                targetCenter = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.minY - offset)
+            case .bottomLeft:
+                targetCenter = CGPoint(x: cropFrameInView.minX - offset, y: cropFrameInView.maxY + offset)
+            case .bottomRight:
+                targetCenter = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.maxY + offset)
+            case .top:
+                targetCenter = CGPoint(x: cropFrameInView.midX, y: cropFrameInView.minY - offset)
+            case .bottom:
+                targetCenter = CGPoint(x: cropFrameInView.midX, y: cropFrameInView.maxY + offset)
+            case .left:
+                targetCenter = CGPoint(x: cropFrameInView.minX - offset, y: cropFrameInView.midY)
+            case .right:
+                targetCenter = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.midY)
+            }
+            
+            // Ограничиваем позицию хендла границами view
+            let handleSize = handle.frame.size
+            let minX = viewBounds.minX + handleSize.width / 2
+            let maxX = viewBounds.maxX - handleSize.width / 2
+            let minY = viewBounds.minY + handleSize.height / 2
+            let maxY = viewBounds.maxY - handleSize.height / 2
+            
+            let constrainedCenter = CGPoint(
+                x: max(minX, min(maxX, targetCenter.x)),
+                y: max(minY, min(maxY, targetCenter.y))
+            )
+            
+            handle.center = constrainedCenter
+            
+            // Логгируем если позиция была ограничена
+            if constrainedCenter != targetCenter {
+                print("Handle \(handle.position) constrained from \(targetCenter) to \(constrainedCenter)")
+            } else {
+                print("Handle \(handle.position) positioned at: \(constrainedCenter)")
+            }
+        }
+        
+        // Проверяем согласованность позиций хендлов
+        if cropHandles.count >= 4 {
+            let topLeftHandle = cropHandles.first(where: { $0.position == .topLeft })
+            let topRightHandle = cropHandles.first(where: { $0.position == .topRight })
+            let bottomLeftHandle = cropHandles.first(where: { $0.position == .bottomLeft })
+            let bottomRightHandle = cropHandles.first(where: { $0.position == .bottomRight })
+            
+            if let topLeft = topLeftHandle, let topRight = topRightHandle,
+               let bottomLeft = bottomLeftHandle, let _ = bottomRightHandle {
+                let actualWidth = topRight.center.x - topLeft.center.x
+                let actualHeight = bottomLeft.center.y - topLeft.center.y
+                print("Actual handle spread: \(actualWidth) x \(actualHeight)")
+                
+                if abs(actualWidth - expectedHandleSpreadWidth) > 5 || abs(actualHeight - expectedHandleSpreadHeight) > 5 {
+                    print("⚠️ WARNING: Handle positions don't match expected spread!")
+                    print("  Expected spread: \(expectedHandleSpreadWidth) x \(expectedHandleSpreadHeight)")
+                    print("  Actual spread: \(actualWidth) x \(actualHeight)")
+                    print("  Crop frame in container: \(cropFrame)")
+                    print("  Crop frame in view: \(cropFrameInView)")
+                    print("  Offset used: \(offset)")
+                }
+            }
+        }
+        
+        // Обновляем позицию cropDragView, чтобы она следовала за cropGridView (только центральная часть)
+        let currentCropFrame = cropGridView.frame
+        let minDragSize: CGFloat = 40 // Минимальный размер для перетягивания
+        
+        if currentCropFrame.width > 80 && currentCropFrame.height > 80 {
+            // Кроп достаточно большой для перетягивания
+            cropDragView.snp.remakeConstraints { make in
+                make.center.equalTo(cropGridView)
+                make.width.equalTo(cropGridView).offset(-60)
+                make.height.equalTo(cropGridView).offset(-60)
+            }
+            cropDragView.isUserInteractionEnabled = true
+            cropDragView.alpha = 1.0
+        } else {
+            // Кроп слишком маленький - отключаем перетягивание
+            cropDragView.snp.remakeConstraints { make in
+                make.center.equalTo(cropGridView)
+                make.width.equalTo(minDragSize)
+                make.height.equalTo(minDragSize)
+            }
+            cropDragView.isUserInteractionEnabled = false
+            cropDragView.alpha = 0.3 // Делаем полупрозрачным
         }
     }
     
@@ -498,12 +953,12 @@ extension PhotoEditorViewController {
         switch gesture.state {
         case .began:
             print("Gesture began on handle: \(handle.position)")
-            // Сохраняем начальное состояние только если нет активного жеста
-            if currentGestureHandle == nil {
-                initialCropFrame = cropGridView.frame
-                currentGestureHandle = handle
-                print("Initial crop frame: \(String(describing: initialCropFrame))")
-            }
+            debugCropState()
+            // Всегда сохраняем текущее состояние при начале нового жеста
+            initialCropFrame = cropGridView.frame
+            currentGestureHandle = handle
+            print("Initial crop frame: \(String(describing: initialCropFrame))")
+            print("Previous gesture handle was: \(currentGestureHandle?.position.debugDescription ?? "none")")
             
         case .changed:
             guard let initialFrame = initialCropFrame,
@@ -512,6 +967,12 @@ extension PhotoEditorViewController {
             // Конвертируем initialFrame в координаты view для вычислений
             let initialFrameInView = photoContainerView.convert(initialFrame, to: view)
             var newFrameInView = initialFrameInView
+            
+            // Проверяем, что imageFrame корректен
+            guard imageFrame.width > 0 && imageFrame.height > 0 else {
+                print("[Gesture Debug] Invalid image frame: \(imageFrame)")
+                return
+            }
             
             switch handle.position {
             case .topLeft:
@@ -785,19 +1246,17 @@ extension PhotoEditorViewController {
             // Конвертируем обратно в координаты photoContainerView
             let newFrame = view.convert(newFrameInView, to: photoContainerView)
             
-            // Ограничиваем новый фрейм границами photoContainerView
-            let containerBounds = photoContainerView.bounds
-            let constrainedFrame = CGRect(
-                x: max(0, min(newFrame.origin.x, containerBounds.width - newFrame.width)),
-                y: max(0, min(newFrame.origin.y, containerBounds.height - newFrame.height)),
-                width: min(newFrame.width, containerBounds.width),
-                height: min(newFrame.height, containerBounds.height)
-            )
+            // Получаем границы изображения в координатах photoContainerView
+            let imageFrameInContainer = photoContainerView.convert(imageView.frame, from: imageView.superview)
             
-                    // Отладочная информация для проверки границ
-        if constrainedFrame != newFrame {
-            print("[Gesture Debug] Frame constrained from \(newFrame) to \(constrainedFrame)")
-        }
+            // Применяем валидацию к новому фрейму
+            let constrainedFrame = validateAndConstrainCropFrame(newFrame, withinImageFrame: imageFrameInContainer)
+            
+            // Отладочная информация для проверки границ
+            if constrainedFrame != newFrame {
+                print("[Gesture Debug] Frame constrained from \(newFrame) to \(constrainedFrame)")
+                print("[Gesture Debug] Image bounds: \(imageFrameInContainer)")
+            }
             
             // Обновляем ограничения с ограниченными координатами
             cropGridView.snp.remakeConstraints { make in
@@ -810,13 +1269,50 @@ extension PhotoEditorViewController {
             // Принудительно обновляем layout
             view.layoutIfNeeded()
             
-            // CropOverlayView работает в координатах главного view
-            cropOverlayView.cropRect = newFrameInView
+            // Обновляем cropDragView чтобы он следовал за cropGridView (только центральная часть)
+            let currentCropFrame = cropGridView.frame
+            let minDragSize: CGFloat = 40 // Минимальный размер для перетягивания
+            
+            if currentCropFrame.width > 80 && currentCropFrame.height > 80 {
+                // Кроп достаточно большой для перетягивания
+                cropDragView.snp.remakeConstraints { make in
+                    make.center.equalTo(cropGridView)
+                    make.width.equalTo(cropGridView).offset(-60)
+                    make.height.equalTo(cropGridView).offset(-60)
+                }
+                cropDragView.isUserInteractionEnabled = true
+                cropDragView.alpha = 1.0
+            } else {
+                // Кроп слишком маленький - отключаем перетягивание
+                cropDragView.snp.remakeConstraints { make in
+                    make.center.equalTo(cropGridView)
+                    make.width.equalTo(minDragSize)
+                    make.height.equalTo(minDragSize)
+                }
+                cropDragView.isUserInteractionEnabled = false
+                cropDragView.alpha = 0.3 // Делаем полупрозрачным
+            }
+            
+            // Дополнительно обновляем layout чтобы убедиться что все компоненты синхронизированы
+            view.layoutIfNeeded()
+            
+            // Пересчитываем cropRect для overlay на основе обновленного cropGridView.frame
+            let updatedCropRectInView = photoContainerView.convert(cropGridView.frame, to: view)
+            cropOverlayView.cropRect = updatedCropRectInView
+            
+            // Обновляем позиции хендлов
             updateCropHandlesPositions()
             
         case .ended, .cancelled:
             // Сбрасываем состояние только для текущего активного жеста
             if currentGestureHandle == handle {
+                print("Gesture ended on handle: \(handle.position)")
+                
+                // Дополнительно обновляем позиции хендлов при окончании жеста
+                DispatchQueue.main.async {
+                    self.updateCropHandlesPositions()
+                }
+                
                 initialCropFrame = nil
                 currentGestureHandle = nil
             }
@@ -1062,15 +1558,42 @@ extension PhotoEditorViewController {
             make.height.equalTo(newHeight)
         }
         
-        UIView.animate(withDuration: 0.3) {
+        // Принудительно обновляем layout без анимации для корректного позиционирования
+        view.layoutIfNeeded()
+        
+        // Обновляем cropDragView чтобы он следовал за cropGridView
+        let updatedCropFrame = cropGridView.frame
+        if updatedCropFrame.width > 80 && updatedCropFrame.height > 80 {
+            cropDragView.snp.remakeConstraints { make in
+                make.center.equalTo(cropGridView)
+                make.width.equalTo(cropGridView).offset(-60)
+                make.height.equalTo(cropGridView).offset(-60)
+            }
+            cropDragView.isUserInteractionEnabled = true
+            cropDragView.alpha = 1.0
+        } else {
+            cropDragView.snp.remakeConstraints { make in
+                make.center.equalTo(cropGridView)
+                make.width.equalTo(40)
+                make.height.equalTo(40)
+            }
+            cropDragView.isUserInteractionEnabled = false
+            cropDragView.alpha = 0.3
+        }
+        
+        // Еще один layout update для синхронизации всех компонентов
+        view.layoutIfNeeded()
+        
+        // Обновляем cropOverlayView на основе актуального фрейма
+        let cropRectInView = photoContainerView.convert(cropGridView.frame, to: view)
+        cropOverlayView.cropRect = cropRectInView
+        
+        // Обновляем позиции хендлов
+        updateCropHandlesPositions()
+        
+        // Добавляем небольшую анимацию для плавности
+        UIView.animate(withDuration: 0.2) {
             self.view.layoutIfNeeded()
-        } completion: { _ in
-            // Обновляем позиции маркеров после анимации
-            self.updateCropHandlesPositions()
-            
-            // Обновляем cropOverlayView
-            let cropRectInView = self.photoContainerView.convert(self.cropGridView.frame, to: self.view)
-            self.cropOverlayView.cropRect = cropRectInView
         }
     }
 }
