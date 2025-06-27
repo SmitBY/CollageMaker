@@ -159,29 +159,27 @@ class StickerPickerViewController: UIViewController {
     private func loadAssetStickers() -> [StickerItem] {
         var assetStickers: [StickerItem] = []
         
-        // В iOS для доступа к Assets используется имя imageset
-        let assetImageSetNames = [
-            "sticker1", "sticker2", "sticker3", "sticker4", "sticker5"
+        // Список всех стикеров в папке Bundle
+        let stickerNames = [
+            "sticker_01", "sticker_02", "sticker_03", "sticker_04", "sticker_05",
+            "image-DFOtpQFrS2TDZYYTKpe3t1xzBXxyqN", "image-nI4awJxBtlfLCLZ7nqsHrh1qJ6AcSI",
+            "image-SLW4v3ZRvj7Si9YqPiWqBSY3K1J03w", "image-590phLtyyJKpI5cBKwpJTC0PQxprv2"
         ]
         
-        // Также пробуем стандартные имена стикеров
-        let standardStickerNames = (6...50).map { "sticker\($0)" }
+        print("Проверяем стикеры...")
         
-        // Объединяем все возможные имена
-        let allPossibleNames = assetImageSetNames + standardStickerNames
-        
-        // Проверяем каждый стикер и добавляем если изображение существует
-        for stickerName in allPossibleNames {
+        // Проверяем каждый стикер
+        for stickerName in stickerNames {
             if UIImage(named: stickerName) != nil {
                 print("Найден стикер: \(stickerName)")
-                let stickerItem = StickerItem(type: .assetImage, content: stickerName)
+                let stickerItem = StickerItem(type: .bundleImage, content: stickerName)
                 assetStickers.append(stickerItem)
             } else {
                 print("Стикер не найден: \(stickerName)")
             }
         }
         
-        print("Загружено \(assetStickers.count) стикеров из Assets")
+        print("Загружено \(assetStickers.count) стикеров из Bundle")
         return assetStickers
     }
 }
@@ -235,6 +233,7 @@ struct StickerItem {
         case emoji
         case systemIcon
         case assetImage
+        case bundleImage
     }
     
     let type: StickerType
@@ -247,6 +246,8 @@ struct StickerItem {
         case .systemIcon:
             return generateSystemIconImage(iconName: content, size: size)
         case .assetImage:
+            return UIImage(named: content)
+        case .bundleImage:
             return UIImage(named: content)
         }
     }

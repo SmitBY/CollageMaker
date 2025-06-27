@@ -357,6 +357,9 @@ class CollageEditorViewController: UIViewController {
                 gestureHandler.delegate = self
                 gestureHandlers.append(gestureHandler)
                 
+                // Обновляем видимость кнопки удаления
+                gestureHandler.updateDeleteButtonVisibility()
+                
                 imageView.tag = index
                 imageView.isUserInteractionEnabled = true
             } else {
@@ -382,6 +385,143 @@ class CollageEditorViewController: UIViewController {
         
         currentIndexPath = IndexPath(item: imageView.tag, section: 0)
         presentImagePicker()
+    }
+    
+    // MARK: - Creative Template Styling
+    
+    private func applyCreativeStyle(to tileView: UIView, template: CollageTemplate, position: (Int, Int), index: Int) {
+        switch template.name {
+        case "Heart 7":
+            // Особая стилизация для формы сердца
+            tileView.layer.cornerRadius = tileView.bounds.width / 6
+            tileView.layer.shadowColor = UIColor.red.cgColor
+            tileView.layer.shadowOpacity = 0.3
+            tileView.layer.shadowRadius = 4
+            tileView.layer.shadowOffset = CGSize(width: 0, height: 2)
+            
+            // Верхние части сердца (индексы 0, 1) - более округлые
+            if index == 0 || index == 1 {
+                tileView.layer.cornerRadius = tileView.bounds.width / 3
+            }
+            // Нижний кончик сердца (индекс 6)
+            else if index == 6 {
+                tileView.layer.cornerRadius = tileView.bounds.width / 4
+                // Делаем кончик более заостренным
+                let trianglePath = UIBezierPath()
+                let bounds = tileView.bounds
+                trianglePath.move(to: CGPoint(x: bounds.midX, y: 0))
+                trianglePath.addLine(to: CGPoint(x: 0, y: bounds.height * 0.7))
+                trianglePath.addLine(to: CGPoint(x: bounds.width, y: bounds.height * 0.7))
+                trianglePath.close()
+                
+                let maskLayer = CAShapeLayer()
+                maskLayer.path = trianglePath.cgPath
+                tileView.layer.mask = maskLayer
+            }
+            
+        case "Circle 4":
+            tileView.layer.cornerRadius = min(tileView.bounds.width, tileView.bounds.height) / 2
+            
+        case "Wave Split 2", "Curve Split 2":
+            tileView.layer.cornerRadius = 12
+            
+        case "Triangle 3":
+            // Создаем треугольную маску
+            let trianglePath = UIBezierPath()
+            let bounds = tileView.bounds
+            if index == 0 {
+                // Верхний треугольник
+                trianglePath.move(to: CGPoint(x: bounds.midX, y: 0))
+                trianglePath.addLine(to: CGPoint(x: 0, y: bounds.height))
+                trianglePath.addLine(to: CGPoint(x: bounds.width, y: bounds.height))
+            } else if index == 1 {
+                // Левый нижний треугольник
+                trianglePath.move(to: CGPoint(x: 0, y: 0))
+                trianglePath.addLine(to: CGPoint(x: 0, y: bounds.height))
+                trianglePath.addLine(to: CGPoint(x: bounds.midX, y: bounds.height))
+            } else {
+                // Правый нижний треугольник
+                trianglePath.move(to: CGPoint(x: bounds.width, y: 0))
+                trianglePath.addLine(to: CGPoint(x: bounds.midX, y: bounds.height))
+                trianglePath.addLine(to: CGPoint(x: bounds.width, y: bounds.height))
+            }
+            trianglePath.close()
+            
+            let maskLayer = CAShapeLayer()
+            maskLayer.path = trianglePath.cgPath
+            tileView.layer.mask = maskLayer
+            
+        case "Diamond 4":
+            // Создаем ромбовидную маску
+            let diamondPath = UIBezierPath()
+            let bounds = tileView.bounds
+            let center = CGPoint(x: bounds.midX, y: bounds.midY)
+            let radius = min(bounds.width, bounds.height) / 3
+            
+            diamondPath.move(to: CGPoint(x: center.x, y: center.y - radius))
+            diamondPath.addLine(to: CGPoint(x: center.x + radius, y: center.y))
+            diamondPath.addLine(to: CGPoint(x: center.x, y: center.y + radius))
+            diamondPath.addLine(to: CGPoint(x: center.x - radius, y: center.y))
+            diamondPath.close()
+            
+            let maskLayer = CAShapeLayer()
+            maskLayer.path = diamondPath.cgPath
+            tileView.layer.mask = maskLayer
+            
+        case "Polaroid Stack":
+            // Поворачиваем фото как поляроиды
+            let rotations: [CGFloat] = [-0.1, 0.15, -0.05]
+            if index < rotations.count {
+                tileView.transform = CGAffineTransform(rotationAngle: rotations[index])
+            }
+            tileView.layer.cornerRadius = 8
+            tileView.layer.shadowColor = UIColor.black.cgColor
+            tileView.layer.shadowOffset = CGSize(width: 0, height: 2)
+            tileView.layer.shadowOpacity = 0.3
+            tileView.layer.shadowRadius = 4
+            
+        case "Film Strip 4":
+            tileView.layer.cornerRadius = 2
+            // Добавляем перфорацию как декорацию
+            tileView.layer.borderWidth = 2
+            tileView.layer.borderColor = UIColor.darkGray.cgColor
+            
+        case "Plus 5", "Star 5":
+            if index == 2 { // Центральная фотография
+                tileView.layer.cornerRadius = min(tileView.bounds.width, tileView.bounds.height) / 2
+            } else {
+                tileView.layer.cornerRadius = 8
+            }
+            
+        case "Hexagon 6":
+            // Создаем шестиугольную маску
+            let hexagonPath = UIBezierPath()
+            let bounds = tileView.bounds
+            let center = CGPoint(x: bounds.midX, y: bounds.midY)
+            let radius = min(bounds.width, bounds.height) / 2.5
+            
+            for i in 0..<6 {
+                let angle = CGFloat(i) * .pi / 3
+                let point = CGPoint(
+                    x: center.x + radius * cos(angle),
+                    y: center.y + radius * sin(angle)
+                )
+                if i == 0 {
+                    hexagonPath.move(to: point)
+                } else {
+                    hexagonPath.addLine(to: point)
+                }
+            }
+            hexagonPath.close()
+            
+            let maskLayer = CAShapeLayer()
+            maskLayer.path = hexagonPath.cgPath
+            tileView.layer.mask = maskLayer
+            
+        default:
+            // Стандартный стиль
+            tileView.layer.cornerRadius = 4.0
+        }
     }
     
     private func presentImagePicker() {
@@ -419,6 +559,11 @@ class CollageEditorViewController: UIViewController {
         
         // Определяем, является ли шаблон специальным.
         let specialTemplates = ["Left Tall, Right Two", "Right Tall, Left Two", "Top Long, Bottom Two", "Bottom Long, Top Two"]
+        let _ = ["Wave Split 2", "Curve Split 2", "Zigzag 2", "Triangle 3", "Fan 3", "Steps 3", 
+                 "Diamond 4", "Windmill 4", "Pyramid 4", "Spiral 4", "Heart 7", "Circle 4", 
+                 "Puzzle 4", "Film Strip 4", "Plus 5", "Star 5", "Hexagon 6", "Flower 6", 
+                 "Octagon 8", "Polaroid Stack", "Scattered Photos"]
+        
         let columns: Int
         let rows: Int
         if specialTemplates.contains(template.name) {
@@ -496,9 +641,13 @@ class CollageEditorViewController: UIViewController {
             tileView.backgroundColor = .clear
             tileView.layer.borderColor = UIColor.white.cgColor
             tileView.layer.borderWidth = 1.0
-            tileView.layer.cornerRadius = 4.0
             tileView.clipsToBounds = true
             tileView.tag = index // Устанавливаем тег для идентификации
+            
+            // Применяем специальные стили для креативных шаблонов после установки constraints
+            DispatchQueue.main.async {
+                self.applyCreativeStyle(to: tileView, template: template, position: position, index: index)
+            }
             
             // Создаем imageView для placeholder.
             let imageView = UIImageView()
@@ -1619,6 +1768,9 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
         gestureHandler.delegate = self
         gestureHandlers.append(gestureHandler)
         
+        // Обновляем видимость кнопки удаления
+        gestureHandler.updateDeleteButtonVisibility()
+        
         imageView.isUserInteractionEnabled = true
     }
 }
@@ -1654,19 +1806,64 @@ extension CollageEditorViewController: AdvancedImageGestureHandlerDelegate {
     }
     
     func gestureHandler(_ handler: AdvancedImageGestureHandler, didTapImageView imageView: UIImageView) {
-        guard let image = imageView.image else { return }
+        // Снимаем выделение со всех других элементов
+        gestureHandlers.forEach { $0.setSelected(false) }
+        textLayers.forEach { $0.setSelected(false) }
+        stickerViews.forEach { $0.setSelected(false) }
+        currentTextLayer = nil
+        currentStickerView = nil
+        hideTextEditingPanel()
         
-        // Открываем редактор изображений
-        coordinator?.showPhotoEditor(with: image) { [weak self, weak imageView] editedImage in
-            // Обновляем изображение после редактирования
-            if let editedImage = editedImage, let imageView = imageView {
-                imageView.image = editedImage
-                
-                // Обновляем массив выбранных фотографий
-                if let tag = imageView.superview?.tag, tag < self?.selectedPhotos.count ?? 0 {
-                    self?.selectedPhotos[tag] = editedImage
-                }
+        selectedImageView = imageView
+        
+        // Убеждаемся, что кнопки остаются доступными
+        ensureButtonsOnTop()
+        
+        // Если изображение пустое (placeholder), открываем выбор изображения
+        if imageView.image == UIImage(named: "placeholder") {
+            if let tileView = imageView.superview,
+               let gridContainer = collageView.viewWithTag(gridContainerTag),
+               let index = gridContainer.subviews.firstIndex(of: tileView) {
+                currentIndexPath = IndexPath(item: index, section: 0)
+                presentImagePicker()
             }
+        }
+    }
+    
+    func gestureHandler(_ handler: AdvancedImageGestureHandler, didDeleteImageView imageView: UIImageView) {
+        // Находим индекс изображения
+        if let tileView = imageView.superview,
+           let gridContainer = collageView.viewWithTag(gridContainerTag),
+           let index = gridContainer.subviews.firstIndex(of: tileView) {
+            
+            // Сбрасываем изображение на placeholder
+            imageView.image = UIImage(named: "placeholder")
+            imageView.contentMode = .scaleAspectFill
+            imageView.backgroundColor = .lightGray
+            
+            // Скрываем кнопку удаления для placeholder
+            handler.updateDeleteButtonVisibility()
+            
+            // Удаляем из массива выбранных фотографий
+            if index < selectedPhotos.count {
+                selectedPhotos[index] = UIImage() // Устанавливаем пустое изображение
+            }
+            
+            // Удаляем обработчик жестов
+            if let handlerIndex = gestureHandlers.firstIndex(of: handler) {
+                gestureHandlers.remove(at: handlerIndex)
+            }
+            
+            // Очищаем жесты
+            imageView.gestureRecognizers?.removeAll()
+            
+            // Добавляем обратно тап для выбора изображения
+            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(selectImageForTile(_:)))
+            imageView.addGestureRecognizer(tapGesture)
+            imageView.tag = index
+            imageView.isUserInteractionEnabled = true
+            
+            print("Изображение удалено из позиции \(index)")
         }
     }
 }

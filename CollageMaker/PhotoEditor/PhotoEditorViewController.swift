@@ -458,87 +458,56 @@ class PhotoEditorViewController: UIViewController {
     }
     
     @objc private func handleCropDrag(_ gesture: UIPanGestureRecognizer) {
-        // Проверяем, что перетягивание доступно
-        guard cropDragView.isUserInteractionEnabled else {
-            print("Crop drag disabled - crop too small")
-            return
-        }
+        guard cropDragView.isUserInteractionEnabled else { return }
         
-        let translation = gesture.translation(in: photoContainerView)
-        
-        // Получаем актуальные границы изображения с учетом трансформаций
-        let imageViewBounds = imageView.bounds
-        let actualImageFrame = photoContainerView.convert(imageViewBounds, from: imageView)
+        let translation = gesture.translation(in: view)
+        let imageFrameInView = photoContainerView.convert(imageView.frame, to: view)
         
         switch gesture.state {
         case .began:
-            print("Crop drag began")
             isDraggingCrop = true
-            cropDragStartFrame = cropGridView.frame
-            debugCropState()
+            cropDragStartFrame = getCurrentCropRectInView()
             
-            // Анимируем увеличение индикатора при начале перетягивания
+            // Анимация начала перетягивания
             UIView.animate(withDuration: 0.2) {
                 self.cropDragView.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
                 self.cropDragView.alpha = 0.8
             }
             
         case .changed:
-            guard let startFrame = cropDragStartFrame else { return }
+            guard let startRect = cropDragStartFrame else { return }
             
-            // Вычисляем новую позицию кропа
-            var newFrame = startFrame
-            newFrame.origin.x = startFrame.origin.x + translation.x
-            newFrame.origin.y = startFrame.origin.y + translation.y
+            // Вычисляем новую позицию
+            var newRect = startRect
+            newRect.origin.x = startRect.origin.x + translation.x
+            newRect.origin.y = startRect.origin.y + translation.y
             
-            // Дополнительная проверка границ изображения
-            guard actualImageFrame.width > 0 && actualImageFrame.height > 0 else {
-                print("[Crop Drag] Invalid image frame: \(actualImageFrame)")
-                return
+            // Ограничиваем границами изображения
+            if newRect.minX < imageFrameInView.minX {
+                newRect.origin.x = imageFrameInView.minX
+                provideBoundaryFeedback()
             }
-            
-            // Ограничиваем новую позицию границами изображения
-            let constrainedFrame = validateAndConstrainCropFrame(newFrame, withinImageFrame: actualImageFrame)
-            
-            // Проверяем, была ли позиция ограничена (для обратной связи)
-            let wasConstrained = constrainedFrame != newFrame
-            if wasConstrained {
-                print("[Crop Drag] Position constrained: attempted \(newFrame), result \(constrainedFrame)")
-                
-                // Визуальная обратная связь при достижении границ
+            if newRect.minY < imageFrameInView.minY {
+                newRect.origin.y = imageFrameInView.minY
+                provideBoundaryFeedback()
+            }
+            if newRect.maxX > imageFrameInView.maxX {
+                newRect.origin.x = imageFrameInView.maxX - newRect.width
+                provideBoundaryFeedback()
+            }
+            if newRect.maxY > imageFrameInView.maxY {
+                newRect.origin.y = imageFrameInView.maxY - newRect.height
                 provideBoundaryFeedback()
             }
             
-            // Обновляем позицию cropGridView
-            cropGridView.snp.remakeConstraints { make in
-                make.left.equalTo(photoContainerView).offset(constrainedFrame.origin.x)
-                make.top.equalTo(photoContainerView).offset(constrainedFrame.origin.y)
-                make.width.equalTo(constrainedFrame.width)
-                make.height.equalTo(constrainedFrame.height)
-            }
-            
-            // Принудительно обновляем layout
-            view.layoutIfNeeded()
-            
-            // Обновляем cropDragView чтобы он следовал за cropGridView
-            cropDragView.snp.remakeConstraints { make in
-                make.edges.equalTo(cropGridView)
-            }
-            
-            // Обновляем CropOverlayView
-            let cropRectInView = photoContainerView.convert(cropGridView.frame, to: view)
-            cropOverlayView.cropRect = cropRectInView
-            
-            // Обновляем позиции хендлов
-            updateCropHandlesPositions()
+            // Применяем новую позицию
+            setCropRect(newRect, inView: true)
             
         case .ended, .cancelled:
-            print("Crop drag ended")
             isDraggingCrop = false
             cropDragStartFrame = nil
-            lastBoundaryFeedbackTime = 0 // Сбрасываем таймер обратной связи
             
-            // Анимируем возврат индикатора к исходному размеру
+            // Анимация окончания перетягивания
             UIView.animate(withDuration: 0.2) {
                 self.cropDragView.transform = CGAffineTransform.identity
                 self.cropDragView.alpha = 1.0
@@ -593,130 +562,276 @@ extension PhotoEditorViewController: UIGestureRecognizerDelegate {
 
 // MARK: - Crop Handles Management
 extension PhotoEditorViewController {
+    
+    /// Создает и настраивает хендлы для изменения размера области кропа
     private func setupCropHandles() {
-        print("Setting up crop handles")
-        
-        // Удаляем старые маркеры
+        // Удаляем старые хендлы
         cropHandles.forEach { $0.removeFromSuperview() }
         cropHandles.removeAll()
         
-        // Создаем угловые маркеры
+        // Создаем новые хендлы для всех позиций
         let cornerPositions: [CropHandleView.Position] = [.topLeft, .topRight, .bottomLeft, .bottomRight]
+        let edgePositions: [CropHandleView.Position] = [.top, .bottom, .left, .right]
+        
+        // Создаем угловые хендлы
         for position in cornerPositions {
             let handle = CropHandleView(type: .corner, position: position)
-            view.addSubview(handle) // Добавляем на главный view для z-index
+            view.addSubview(handle)
             cropHandles.append(handle)
             
-            // Добавляем жест
+            // Добавляем жест для каждого хендла
             let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleCropHandlePan(_:)))
             panGesture.delegate = self
             handle.addGestureRecognizer(panGesture)
-            print("Created corner handle: \(position)")
         }
         
-        // Создаем боковые маркеры
-        let edgePositions: [CropHandleView.Position] = [.top, .bottom, .left, .right]
+        // Создаем боковые хендлы
         for position in edgePositions {
             let handle = CropHandleView(type: .edge, position: position)
-            view.addSubview(handle) // Добавляем на главный view для z-index
+            view.addSubview(handle)
             cropHandles.append(handle)
             
-            // Добавляем жест
+            // Добавляем жест для каждого хендла
             let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleCropHandlePan(_:)))
             panGesture.delegate = self
             handle.addGestureRecognizer(panGesture)
-            print("Created edge handle: \(position)")
         }
         
-        print("Total handles created: \(cropHandles.count)")
-        
-        // Проверяем, что cropGridView имеет валидный фрейм перед позиционированием хендлов
-        DispatchQueue.main.async {
-            // Даем время Auto Layout для вычисления позиций
-            if self.cropGridView.frame.width > 0 && self.cropGridView.frame.height > 0 {
-                self.updateCropHandlesPositions()
-            } else {
-                print("Warning: CropGridView has invalid frame, delaying handle positioning")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    self.updateCropHandlesPositions()
-                }
-            }
-        }
+        // Устанавливаем начальные позиции хендлов
+        updateCropHandlesPositions()
     }
     
-    /// Валидирует и корректирует фрейм кропа, чтобы он не выходил за границы изображения
-    private func validateAndConstrainCropFrame(_ frame: CGRect, withinImageFrame imageFrame: CGRect) -> CGRect {
-        let minSize: CGFloat = 50.0
-        
-        // Проверяем, что imageFrame валиден
-        guard imageFrame.width > 0 && imageFrame.height > 0 else {
-            print("[Frame Validation] Invalid image frame: \(imageFrame)")
-            return frame
+    /// Обновляет позиции хендлов на основе текущей области кропа
+    private func updateCropHandlesPositions() {
+        // Предотвращаем множественные одновременные обновления
+        guard !isUpdatingHandlePositions else {
+            return
         }
         
-        // Ограничиваем размеры минимальными и максимальными значениями
-        let validWidth = max(minSize, min(frame.width, imageFrame.width))
-        let validHeight = max(minSize, min(frame.height, imageFrame.height))
+        isUpdatingHandlePositions = true
+        defer { isUpdatingHandlePositions = false }
         
-        // Ограничиваем позицию границами изображения с учетом размеров кропа
-        let validX = max(imageFrame.minX, min(frame.origin.x, imageFrame.maxX - validWidth))
-        let validY = max(imageFrame.minY, min(frame.origin.y, imageFrame.maxY - validHeight))
+        // Получаем текущую область кропа в координатах view
+        let cropRect = getCurrentCropRectInView()
+        let offset: CGFloat = 15
         
-        let validFrame = CGRect(x: validX, y: validY, width: validWidth, height: validHeight)
-        
-        // Дополнительная проверка: убеждаемся, что весь кроп находится внутри изображения
-        let containedFrame = CGRect(
-            x: max(imageFrame.minX, min(validFrame.minX, imageFrame.maxX - validFrame.width)),
-            y: max(imageFrame.minY, min(validFrame.minY, imageFrame.maxY - validFrame.height)),
-            width: min(validFrame.width, imageFrame.width),
-            height: min(validFrame.height, imageFrame.height)
+        // Получаем безопасные границы
+        let safeArea = view.safeAreaInsets
+        let viewBounds = CGRect(
+            x: safeArea.left,
+            y: safeArea.top,
+            width: view.bounds.width - safeArea.left - safeArea.right,
+            height: view.bounds.height - safeArea.top - safeArea.bottom
         )
         
-        if containedFrame != frame {
-            print("[Frame Validation] Corrected frame from \(frame) to \(containedFrame)")
-            print("[Frame Validation] Image bounds: \(imageFrame)")
-            print("[Frame Validation] Corrections applied:")
-            if containedFrame.origin.x != frame.origin.x {
-                print("  - X position: \(frame.origin.x) → \(containedFrame.origin.x)")
-            }
-            if containedFrame.origin.y != frame.origin.y {
-                print("  - Y position: \(frame.origin.y) → \(containedFrame.origin.y)")
-            }
-            if containedFrame.width != frame.width {
-                print("  - Width: \(frame.width) → \(containedFrame.width)")
-            }
-            if containedFrame.height != frame.height {
-                print("  - Height: \(frame.height) → \(containedFrame.height)")
-            }
+        // Позиционируем каждый хендл
+        for handle in cropHandles {
+            let targetCenter = getHandleTargetCenter(for: handle.position, cropRect: cropRect, offset: offset)
+            
+            // Ограничиваем позицию границами экрана
+            let handleSize = CGSize(width: 30, height: 30) // Размер хендла
+            let constrainedCenter = CGPoint(
+                x: max(viewBounds.minX + handleSize.width/2, min(viewBounds.maxX - handleSize.width/2, targetCenter.x)),
+                y: max(viewBounds.minY + handleSize.height/2, min(viewBounds.maxY - handleSize.height/2, targetCenter.y))
+            )
+            
+            handle.center = constrainedCenter
         }
         
-        return containedFrame
+        // Обновляем визуальную рамку
+        cropOverlayView.cropRect = cropRect
     }
     
-    /// Отладочный метод для проверки состояния кропа
-    private func debugCropState() {
-        let cropFrame = cropGridView.frame
-        let imageFrame = imageView.frame
-        let containerBounds = photoContainerView.bounds
-        
-        print("=== CROP DEBUG STATE ===")
-        print("CropGrid frame: \(cropFrame)")
-        print("ImageView frame: \(imageFrame)")
-        print("Container bounds: \(containerBounds)")
-        print("Handles count: \(cropHandles.count)")
-        print("Active gesture handle: \(currentGestureHandle?.position.debugDescription ?? "none")")
-        print("Is dragging crop: \(isDraggingCrop)")
-        print("Crop drag start frame: \(String(describing: cropDragStartFrame))")
-        
-        // Проверяем текущие позиции хендлов
-        for handle in cropHandles {
-            print("Handle \(handle.position.debugDescription) at: \(handle.center)")
+    /// Возвращает целевую позицию для хендла
+    private func getHandleTargetCenter(for position: CropHandleView.Position, cropRect: CGRect, offset: CGFloat) -> CGPoint {
+        switch position {
+        case .topLeft:
+            return CGPoint(x: cropRect.minX - offset, y: cropRect.minY - offset)
+        case .topRight:
+            return CGPoint(x: cropRect.maxX + offset, y: cropRect.minY - offset)
+        case .bottomLeft:
+            return CGPoint(x: cropRect.minX - offset, y: cropRect.maxY + offset)
+        case .bottomRight:
+            return CGPoint(x: cropRect.maxX + offset, y: cropRect.maxY + offset)
+        case .top:
+            return CGPoint(x: cropRect.midX, y: cropRect.minY - offset)
+        case .bottom:
+            return CGPoint(x: cropRect.midX, y: cropRect.maxY + offset)
+        case .left:
+            return CGPoint(x: cropRect.minX - offset, y: cropRect.midY)
+        case .right:
+            return CGPoint(x: cropRect.maxX + offset, y: cropRect.midY)
+        }
+    }
+    
+    /// Возвращает текущую область кропа в координатах главного view
+    private func getCurrentCropRectInView() -> CGRect {
+        // Если есть активная область кропа в cropGridView, используем её
+        if !cropGridView.frame.isEmpty {
+            return photoContainerView.convert(cropGridView.frame, to: view)
         }
         
-        // Проверяем cropFrameInView
-        let cropFrameInView = photoContainerView.convert(cropFrame, to: view)
-        print("CropFrame in view coordinates: \(cropFrameInView)")
-        print("========================")
+        // Иначе используем всю видимую область изображения
+        let imageFrame = photoContainerView.convert(imageView.frame, to: view)
+        let containerFrame = photoContainerView.convert(photoContainerView.bounds, to: view)
+        return imageFrame.intersection(containerFrame)
+    }
+    
+    /// Устанавливает новую область кропа и обновляет все связанные элементы
+    private func setCropRect(_ newRect: CGRect, inView: Bool = true) {
+        let rectInContainer: CGRect
+        
+        if inView {
+            // Конвертируем из координат view в координаты контейнера
+            rectInContainer = view.convert(newRect, to: photoContainerView)
+        } else {
+            rectInContainer = newRect
+        }
+        
+        // Обновляем cropGridView
+        cropGridView.snp.remakeConstraints { make in
+            make.left.equalTo(photoContainerView).offset(rectInContainer.origin.x)
+            make.top.equalTo(photoContainerView).offset(rectInContainer.origin.y)
+            make.width.equalTo(rectInContainer.width)
+            make.height.equalTo(rectInContainer.height)
+        }
+        
+        // Обновляем cropDragView
+        updateCropDragView()
+        
+        // Принудительно обновляем layout
+        view.layoutIfNeeded()
+        
+        // Обновляем позиции хендлов
+        updateCropHandlesPositions()
+    }
+    
+    /// Обновляет cropDragView для соответствия текущей области кропа
+    private func updateCropDragView() {
+        let currentCropFrame = cropGridView.frame
+        
+        if currentCropFrame.width > 80 && currentCropFrame.height > 80 {
+            cropDragView.snp.remakeConstraints { make in
+                make.center.equalTo(cropGridView)
+                make.width.equalTo(cropGridView).offset(-60)
+                make.height.equalTo(cropGridView).offset(-60)
+            }
+            cropDragView.isUserInteractionEnabled = true
+            cropDragView.alpha = 1.0
+        } else {
+            cropDragView.snp.remakeConstraints { make in
+                make.center.equalTo(cropGridView)
+                make.width.equalTo(40)
+                make.height.equalTo(40)
+            }
+            cropDragView.isUserInteractionEnabled = false
+            cropDragView.alpha = 0.3
+        }
+    }
+    
+    @objc private func handleCropHandlePan(_ gesture: UIPanGestureRecognizer) {
+        guard let handle = gesture.view as? CropHandleView else { return }
+        
+        let translation = gesture.translation(in: view)
+        let imageFrameInView = photoContainerView.convert(imageView.frame, to: view)
+        let minCropSize: CGFloat = 100.0
+        
+        switch gesture.state {
+        case .began:
+            // Сохраняем начальное состояние
+            initialCropFrame = cropGridView.frame
+            currentGestureHandle = handle
+            
+        case .changed:
+            guard let initialFrame = initialCropFrame,
+                  currentGestureHandle == handle else { return }
+            
+            // Получаем начальную область в координатах view
+            let initialRectInView = photoContainerView.convert(initialFrame, to: view)
+            var newRect = initialRectInView
+            
+            // Применяем изменения в зависимости от позиции хендла
+            switch handle.position {
+            case .topLeft:
+                newRect.origin.x = max(imageFrameInView.minX, initialRectInView.minX + translation.x)
+                newRect.origin.y = max(imageFrameInView.minY, initialRectInView.minY + translation.y)
+                newRect.size.width = initialRectInView.maxX - newRect.origin.x
+                newRect.size.height = initialRectInView.maxY - newRect.origin.y
+                
+            case .topRight:
+                newRect.origin.y = max(imageFrameInView.minY, initialRectInView.minY + translation.y)
+                newRect.size.width = max(minCropSize, min(imageFrameInView.maxX - initialRectInView.minX, initialRectInView.width + translation.x))
+                newRect.size.height = initialRectInView.maxY - newRect.origin.y
+                
+            case .bottomLeft:
+                newRect.origin.x = max(imageFrameInView.minX, initialRectInView.minX + translation.x)
+                newRect.size.width = initialRectInView.maxX - newRect.origin.x
+                newRect.size.height = max(minCropSize, min(imageFrameInView.maxY - initialRectInView.minY, initialRectInView.height + translation.y))
+                
+            case .bottomRight:
+                newRect.size.width = max(minCropSize, min(imageFrameInView.maxX - initialRectInView.minX, initialRectInView.width + translation.x))
+                newRect.size.height = max(minCropSize, min(imageFrameInView.maxY - initialRectInView.minY, initialRectInView.height + translation.y))
+                
+            case .top:
+                newRect.origin.y = max(imageFrameInView.minY, initialRectInView.minY + translation.y)
+                newRect.size.height = initialRectInView.maxY - newRect.origin.y
+                
+            case .bottom:
+                newRect.size.height = max(minCropSize, min(imageFrameInView.maxY - initialRectInView.minY, initialRectInView.height + translation.y))
+                
+            case .left:
+                newRect.origin.x = max(imageFrameInView.minX, initialRectInView.minX + translation.x)
+                newRect.size.width = initialRectInView.maxX - newRect.origin.x
+                
+            case .right:
+                newRect.size.width = max(minCropSize, min(imageFrameInView.maxX - initialRectInView.minX, initialRectInView.width + translation.x))
+            }
+            
+            // Применяем ограничения по соотношению сторон если нужно
+            if let ratio = currentAspectRatio.ratio {
+                newRect = applyAspectRatioConstraint(to: newRect, ratio: ratio, imageFrame: imageFrameInView)
+            }
+            
+            // Устанавливаем новую область кропа
+            setCropRect(newRect, inView: true)
+            
+        case .ended, .cancelled:
+            initialCropFrame = nil
+            currentGestureHandle = nil
+            
+        default:
+            break
+        }
+    }
+    
+    /// Применяет ограничения по соотношению сторон к области кропа
+    private func applyAspectRatioConstraint(to rect: CGRect, ratio: CGFloat, imageFrame: CGRect) -> CGRect {
+        var constrainedRect = rect
+        
+        // Определяем, какой размер ограничивает
+        let widthBasedHeight = rect.width / ratio
+        let heightBasedWidth = rect.height * ratio
+        
+        if widthBasedHeight <= rect.height {
+            // Ограничиваем по ширине
+            constrainedRect.size.height = widthBasedHeight
+        } else {
+            // Ограничиваем по высоте
+            constrainedRect.size.width = heightBasedWidth
+        }
+        
+        // Проверяем границы изображения
+        if constrainedRect.maxX > imageFrame.maxX {
+            constrainedRect.size.width = imageFrame.maxX - constrainedRect.minX
+            constrainedRect.size.height = constrainedRect.width / ratio
+        }
+        
+        if constrainedRect.maxY > imageFrame.maxY {
+            constrainedRect.size.height = imageFrame.maxY - constrainedRect.minY
+            constrainedRect.size.width = constrainedRect.height * ratio
+        }
+        
+        return constrainedRect
     }
     
     /// Предоставляет визуальную обратную связь при достижении границ изображения
@@ -729,8 +844,6 @@ extension PhotoEditorViewController {
             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
             lastBoundaryFeedbackTime = currentTime
-            
-            print("[Boundary Feedback] Haptic feedback provided")
         }
         
         // Кратковременная анимация cropDragView для визуальной обратной связи
@@ -740,585 +853,6 @@ extension PhotoEditorViewController {
             UIView.animate(withDuration: 0.1) {
                 self.cropDragView.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
             }
-        }
-    }
-    
-    /// Принудительно переставляет хендлы на правильные позиции
-    private func repositionHandlesDirectly() {
-        let cropFrame = cropGridView.frame
-        let offset: CGFloat = 15
-        
-        guard cropFrame.width > 0 && cropFrame.height > 0 else {
-            print("Cannot reposition handles - invalid crop frame: \(cropFrame)")
-            return
-        }
-        
-        let cropFrameInView = photoContainerView.convert(cropFrame, to: view)
-        print("🔄 Repositioning handles based on cropFrameInView: \(cropFrameInView)")
-        
-        // Получаем границы основного view с учетом safe area
-        let safeArea = view.safeAreaInsets
-        let viewBounds = CGRect(
-            x: safeArea.left,
-            y: safeArea.top,
-            width: view.bounds.width - safeArea.left - safeArea.right,
-            height: view.bounds.height - safeArea.top - safeArea.bottom
-        )
-        
-        for handle in cropHandles {
-            var targetCenter: CGPoint
-            
-            switch handle.position {
-            case .topLeft:
-                targetCenter = CGPoint(x: cropFrameInView.minX - offset, y: cropFrameInView.minY - offset)
-            case .topRight:
-                targetCenter = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.minY - offset)
-            case .bottomLeft:
-                targetCenter = CGPoint(x: cropFrameInView.minX - offset, y: cropFrameInView.maxY + offset)
-            case .bottomRight:
-                targetCenter = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.maxY + offset)
-            case .top:
-                targetCenter = CGPoint(x: cropFrameInView.midX, y: cropFrameInView.minY - offset)
-            case .bottom:
-                targetCenter = CGPoint(x: cropFrameInView.midX, y: cropFrameInView.maxY + offset)
-            case .left:
-                targetCenter = CGPoint(x: cropFrameInView.minX - offset, y: cropFrameInView.midY)
-            case .right:
-                targetCenter = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.midY)
-            }
-            
-            // Ограничиваем позицию хендла границами view
-            let handleSize = handle.frame.size
-            let minX = viewBounds.minX + handleSize.width / 2
-            let maxX = viewBounds.maxX - handleSize.width / 2
-            let minY = viewBounds.minY + handleSize.height / 2
-            let maxY = viewBounds.maxY - handleSize.height / 2
-            
-            let constrainedCenter = CGPoint(
-                x: max(minX, min(maxX, targetCenter.x)),
-                y: max(minY, min(maxY, targetCenter.y))
-            )
-            
-            // Принудительно обновляем позицию хендла
-            handle.center = constrainedCenter
-            print("🔄 Fixed handle \(handle.position.debugDescription) at: \(constrainedCenter)")
-        }
-    }
-    
-    private func updateCropHandlesPositions() {
-        // Предотвращаем множественные одновременные обновления
-        guard !isUpdatingHandlePositions else {
-            print("⚠️ Skipping handle update - already in progress")
-            return
-        }
-        
-        isUpdatingHandlePositions = true
-        defer { isUpdatingHandlePositions = false }
-        
-        let cropFrame = cropGridView.frame
-        let offset: CGFloat = 15 // Смещение маркеров от края рамки
-        
-        // Проверяем что рамка имеет нормальные размеры
-        guard cropFrame.width > 0 && cropFrame.height > 0 else {
-            print("cropFrame is empty: \(cropFrame)")
-            return
-        }
-        
-        // Конвертируем координаты cropGridView в координаты главного view
-        let cropFrameInView = photoContainerView.convert(cropFrame, to: view)
-        print("Updating handle positions for cropFrame: \(cropFrame), in view: \(cropFrameInView)")
-        
-        // Дополнительная проверка согласованности размеров
-        let expectedWidth = cropFrameInView.width
-        let expectedHeight = cropFrameInView.height
-        print("Expected crop size: \(expectedWidth) x \(expectedHeight)")
-        
-        // Ожидаемый размах хендлов (crop + offset с каждой стороны)
-        let expectedHandleSpreadWidth = expectedWidth + (offset * 2)
-        let expectedHandleSpreadHeight = expectedHeight + (offset * 2)
-        print("Expected handle spread: \(expectedHandleSpreadWidth) x \(expectedHandleSpreadHeight)")
-        
-        // Получаем границы основного view с учетом safe area
-        let safeArea = view.safeAreaInsets
-        let viewBounds = CGRect(
-            x: safeArea.left,
-            y: safeArea.top,
-            width: view.bounds.width - safeArea.left - safeArea.right,
-            height: view.bounds.height - safeArea.top - safeArea.bottom
-        )
-        
-        for handle in cropHandles {
-            var targetCenter: CGPoint
-            
-            switch handle.position {
-            case .topLeft:
-                targetCenter = CGPoint(x: cropFrameInView.minX - offset, y: cropFrameInView.minY - offset)
-            case .topRight:
-                targetCenter = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.minY - offset)
-            case .bottomLeft:
-                targetCenter = CGPoint(x: cropFrameInView.minX - offset, y: cropFrameInView.maxY + offset)
-            case .bottomRight:
-                targetCenter = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.maxY + offset)
-            case .top:
-                targetCenter = CGPoint(x: cropFrameInView.midX, y: cropFrameInView.minY - offset)
-            case .bottom:
-                targetCenter = CGPoint(x: cropFrameInView.midX, y: cropFrameInView.maxY + offset)
-            case .left:
-                targetCenter = CGPoint(x: cropFrameInView.minX - offset, y: cropFrameInView.midY)
-            case .right:
-                targetCenter = CGPoint(x: cropFrameInView.maxX + offset, y: cropFrameInView.midY)
-            }
-            
-            // Ограничиваем позицию хендла границами view
-            let handleSize = handle.frame.size
-            let minX = viewBounds.minX + handleSize.width / 2
-            let maxX = viewBounds.maxX - handleSize.width / 2
-            let minY = viewBounds.minY + handleSize.height / 2
-            let maxY = viewBounds.maxY - handleSize.height / 2
-            
-            let constrainedCenter = CGPoint(
-                x: max(minX, min(maxX, targetCenter.x)),
-                y: max(minY, min(maxY, targetCenter.y))
-            )
-            
-            handle.center = constrainedCenter
-            
-            // Логгируем если позиция была ограничена
-            if constrainedCenter != targetCenter {
-                print("Handle \(handle.position) constrained from \(targetCenter) to \(constrainedCenter)")
-            } else {
-                print("Handle \(handle.position) positioned at: \(constrainedCenter)")
-            }
-        }
-        
-        // Проверяем согласованность позиций хендлов
-        if cropHandles.count >= 4 {
-            let topLeftHandle = cropHandles.first(where: { $0.position == .topLeft })
-            let topRightHandle = cropHandles.first(where: { $0.position == .topRight })
-            let bottomLeftHandle = cropHandles.first(where: { $0.position == .bottomLeft })
-            let bottomRightHandle = cropHandles.first(where: { $0.position == .bottomRight })
-            
-            if let topLeft = topLeftHandle, let topRight = topRightHandle,
-               let bottomLeft = bottomLeftHandle, let _ = bottomRightHandle {
-                let actualWidth = topRight.center.x - topLeft.center.x
-                let actualHeight = bottomLeft.center.y - topLeft.center.y
-                print("Actual handle spread: \(actualWidth) x \(actualHeight)")
-                
-                if abs(actualWidth - expectedHandleSpreadWidth) > 5 || abs(actualHeight - expectedHandleSpreadHeight) > 5 {
-                    print("⚠️ WARNING: Handle positions don't match expected spread!")
-                    print("  Expected spread: \(expectedHandleSpreadWidth) x \(expectedHandleSpreadHeight)")
-                    print("  Actual spread: \(actualWidth) x \(actualHeight)")
-                    print("  Crop frame in container: \(cropFrame)")
-                    print("  Crop frame in view: \(cropFrameInView)")
-                    print("  Offset used: \(offset)")
-                }
-            }
-        }
-        
-        // Обновляем позицию cropDragView, чтобы она следовала за cropGridView (только центральная часть)
-        let currentCropFrame = cropGridView.frame
-        let minDragSize: CGFloat = 40 // Минимальный размер для перетягивания
-        
-        if currentCropFrame.width > 80 && currentCropFrame.height > 80 {
-            // Кроп достаточно большой для перетягивания
-            cropDragView.snp.remakeConstraints { make in
-                make.center.equalTo(cropGridView)
-                make.width.equalTo(cropGridView).offset(-60)
-                make.height.equalTo(cropGridView).offset(-60)
-            }
-            cropDragView.isUserInteractionEnabled = true
-            cropDragView.alpha = 1.0
-        } else {
-            // Кроп слишком маленький - отключаем перетягивание
-            cropDragView.snp.remakeConstraints { make in
-                make.center.equalTo(cropGridView)
-                make.width.equalTo(minDragSize)
-                make.height.equalTo(minDragSize)
-            }
-            cropDragView.isUserInteractionEnabled = false
-            cropDragView.alpha = 0.3 // Делаем полупрозрачным
-        }
-    }
-    
-    @objc private func handleCropHandlePan(_ gesture: UIPanGestureRecognizer) {
-        guard let handle = gesture.view as? CropHandleView else { 
-            print("No handle found in gesture")
-            return 
-        }
-        
-        let translation = gesture.translation(in: view)
-        let imageFrame = photoContainerView.convert(imageView.frame, to: view)
-        let minCropSize: CGFloat = 100.0
-        
-        switch gesture.state {
-        case .began:
-            print("Gesture began on handle: \(handle.position)")
-            debugCropState()
-            // Всегда сохраняем текущее состояние при начале нового жеста
-            initialCropFrame = cropGridView.frame
-            currentGestureHandle = handle
-            print("Initial crop frame: \(String(describing: initialCropFrame))")
-            print("Previous gesture handle was: \(currentGestureHandle?.position.debugDescription ?? "none")")
-            
-        case .changed:
-            guard let initialFrame = initialCropFrame,
-                  currentGestureHandle == handle else { return }
-            
-            // Конвертируем initialFrame в координаты view для вычислений
-            let initialFrameInView = photoContainerView.convert(initialFrame, to: view)
-            var newFrameInView = initialFrameInView
-            
-            // Проверяем, что imageFrame корректен
-            guard imageFrame.width > 0 && imageFrame.height > 0 else {
-                print("[Gesture Debug] Invalid image frame: \(imageFrame)")
-                return
-            }
-            
-            switch handle.position {
-            case .topLeft:
-                let deltaX = translation.x
-                let deltaY = translation.y
-                
-                if let ratio = currentAspectRatio.ratio {
-                    // Определяем, какое изменение больше
-                    let widthChange = abs(deltaX) / initialFrameInView.width
-                    let heightChange = abs(deltaY) / initialFrameInView.height
-                    
-                    if widthChange >= heightChange {
-                        // Изменяем по ширине
-                        let newX = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
-                        let newWidth = initialFrameInView.maxX - newX
-                        let newHeight = newWidth / ratio
-                        
-                        newFrameInView.origin.x = newX
-                        newFrameInView.size.width = newWidth
-                        newFrameInView.size.height = newHeight
-                        newFrameInView.origin.y = initialFrameInView.maxY - newHeight
-                        
-                        // Проверяем границы по высоте
-                        if newFrameInView.origin.y < imageFrame.origin.y {
-                            newFrameInView.origin.y = imageFrame.origin.y
-                            newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
-                            newFrameInView.size.width = newFrameInView.size.height * ratio
-                            newFrameInView.origin.x = initialFrameInView.maxX - newFrameInView.size.width
-                        }
-                    } else {
-                        // Изменяем по высоте
-                        let newY = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
-                        let newHeight = initialFrameInView.maxY - newY
-                        let newWidth = newHeight * ratio
-                        
-                        newFrameInView.origin.y = newY
-                        newFrameInView.size.height = newHeight
-                        newFrameInView.size.width = newWidth
-                        newFrameInView.origin.x = initialFrameInView.maxX - newWidth
-                        
-                        // Проверяем границы по ширине
-                        if newFrameInView.origin.x < imageFrame.origin.x {
-                            newFrameInView.origin.x = imageFrame.origin.x
-                            newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
-                            newFrameInView.size.height = newFrameInView.size.width / ratio
-                            newFrameInView.origin.y = initialFrameInView.maxY - newFrameInView.size.height
-                        }
-                    }
-                } else {
-                    // Произвольный формат
-                    newFrameInView.origin.x = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
-                    newFrameInView.origin.y = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
-                    newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
-                    newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
-                }
-                
-            case .topRight:
-                let deltaX = translation.x
-                let deltaY = translation.y
-                
-                if let ratio = currentAspectRatio.ratio {
-                    // Сохраняем соотношение сторон
-                    let newY = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
-                    let newWidth = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
-                    let newHeight = initialFrameInView.maxY - newY
-                    
-                    // Определяем ограничивающий фактор
-                    let widthBasedHeight = newWidth / ratio
-                    let heightBasedWidth = newHeight * ratio
-                    
-                    if widthBasedHeight <= newHeight {
-                        // Ограничиваем по ширине
-                        newFrameInView.size.width = newWidth
-                        newFrameInView.size.height = widthBasedHeight
-                        newFrameInView.origin.y = initialFrameInView.maxY - newFrameInView.size.height
-                    } else {
-                        // Ограничиваем по высоте
-                        newFrameInView.origin.y = newY
-                        newFrameInView.size.height = newHeight
-                        newFrameInView.size.width = heightBasedWidth
-                    }
-                } else {
-                    // Произвольный формат
-                    newFrameInView.origin.y = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
-                    newFrameInView.size.width = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
-                    newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
-                }
-                
-            case .bottomLeft:
-                let deltaX = translation.x
-                let deltaY = translation.y
-                
-                if let ratio = currentAspectRatio.ratio {
-                    // Сохраняем соотношение сторон
-                    let newX = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
-                    let newWidth = initialFrameInView.maxX - newX
-                    let newHeight = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
-                    
-                    // Определяем ограничивающий фактор
-                    let widthBasedHeight = newWidth / ratio
-                    let heightBasedWidth = newHeight * ratio
-                    
-                    if widthBasedHeight <= newHeight {
-                        // Ограничиваем по ширине
-                        newFrameInView.origin.x = newX
-                        newFrameInView.size.width = newWidth
-                        newFrameInView.size.height = widthBasedHeight
-                    } else {
-                        // Ограничиваем по высоте
-                        newFrameInView.size.height = newHeight
-                        newFrameInView.size.width = heightBasedWidth
-                        newFrameInView.origin.x = initialFrameInView.maxX - newFrameInView.size.width
-                    }
-                } else {
-                    // Произвольный формат
-                    newFrameInView.origin.x = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
-                    newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
-                    newFrameInView.size.height = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
-                }
-                
-            case .bottomRight:
-                let deltaX = translation.x
-                let deltaY = translation.y
-                
-                if let ratio = currentAspectRatio.ratio {
-                    // Сохраняем соотношение сторон - используем наибольшее изменение
-                    let potentialWidth = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
-                    let potentialHeight = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
-                    
-                    // Определяем, какое изменение больше относительно исходного размера
-                    let widthChange = abs(deltaX) / initialFrameInView.width
-                    let heightChange = abs(deltaY) / initialFrameInView.height
-                    
-                    if widthChange >= heightChange {
-                        // Изменяем по ширине, высота следует за соотношением
-                        newFrameInView.size.width = potentialWidth
-                        newFrameInView.size.height = potentialWidth / ratio
-                        
-                        // Проверяем границы по высоте
-                        if newFrameInView.size.height > imageFrame.maxY - initialFrameInView.origin.y {
-                            newFrameInView.size.height = imageFrame.maxY - initialFrameInView.origin.y
-                            newFrameInView.size.width = newFrameInView.size.height * ratio
-                        }
-                    } else {
-                        // Изменяем по высоте, ширина следует за соотношением
-                        newFrameInView.size.height = potentialHeight
-                        newFrameInView.size.width = potentialHeight * ratio
-                        
-                        // Проверяем границы по ширине
-                        if newFrameInView.size.width > imageFrame.maxX - initialFrameInView.origin.x {
-                            newFrameInView.size.width = imageFrame.maxX - initialFrameInView.origin.x
-                            newFrameInView.size.height = newFrameInView.size.width / ratio
-                        }
-                    }
-                } else {
-                    // Произвольный формат
-                    newFrameInView.size.width = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
-                    newFrameInView.size.height = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
-                }
-                
-            case .left:
-                let deltaX = translation.x
-                
-                if let ratio = currentAspectRatio.ratio {
-                    // При фиксированном соотношении сторон боковые маркеры изменяют размер пропорционально
-                    let newX = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
-                    let newWidth = initialFrameInView.maxX - newX
-                    let newHeight = newWidth / ratio
-                    
-                    // Проверяем, что новая высота помещается в границы изображения
-                    let maxHeight = imageFrame.height
-                    if newHeight <= maxHeight {
-                        newFrameInView.origin.x = newX
-                        newFrameInView.size.width = newWidth
-                        newFrameInView.size.height = newHeight
-                        // Центрируем по вертикали относительно изображения
-                        let centerY = imageFrame.midY
-                        newFrameInView.origin.y = centerY - newHeight / 2
-                        
-                        // Корректируем если выходим за границы
-                        if newFrameInView.origin.y < imageFrame.origin.y {
-                            newFrameInView.origin.y = imageFrame.origin.y
-                        } else if newFrameInView.maxY > imageFrame.maxY {
-                            newFrameInView.origin.y = imageFrame.maxY - newHeight
-                        }
-                    } else {
-                        // Ограничиваем по высоте
-                        newFrameInView.size.height = maxHeight
-                        newFrameInView.size.width = maxHeight * ratio
-                        newFrameInView.origin.x = initialFrameInView.maxX - newFrameInView.size.width
-                        newFrameInView.origin.y = imageFrame.origin.y
-                    }
-                } else {
-                    // Произвольный формат
-                    newFrameInView.origin.x = max(imageFrame.origin.x, min(initialFrameInView.maxX - minCropSize, initialFrameInView.origin.x + deltaX))
-                    newFrameInView.size.width = initialFrameInView.maxX - newFrameInView.origin.x
-                }
-                
-            case .right:
-                let deltaX = translation.x
-                
-                if let ratio = currentAspectRatio.ratio {
-                    // При фиксированном соотношении сторон боковые маркеры изменяют размер пропорционально
-                    let newWidth = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
-                    let newHeight = newWidth / ratio
-                    
-                    // Проверяем, что новая высота помещается в границы изображения
-                    let maxHeight = imageFrame.height
-                    if newHeight <= maxHeight {
-                        newFrameInView.size.width = newWidth
-                        newFrameInView.size.height = newHeight
-                        // Центрируем по вертикали относительно изображения
-                        let centerY = imageFrame.midY
-                        newFrameInView.origin.y = centerY - newHeight / 2
-                        
-                        // Корректируем если выходим за границы
-                        if newFrameInView.origin.y < imageFrame.origin.y {
-                            newFrameInView.origin.y = imageFrame.origin.y
-                        } else if newFrameInView.maxY > imageFrame.maxY {
-                            newFrameInView.origin.y = imageFrame.maxY - newHeight
-                        }
-                    } else {
-                        // Ограничиваем по высоте
-                        newFrameInView.size.height = maxHeight
-                        newFrameInView.size.width = maxHeight * ratio
-                        newFrameInView.origin.y = imageFrame.origin.y
-                    }
-                } else {
-                    // Произвольный формат
-                    newFrameInView.size.width = max(minCropSize, min(imageFrame.maxX - initialFrameInView.origin.x, initialFrameInView.width + deltaX))
-                }
-                
-            case .top:
-                let deltaY = translation.y
-                
-                if let ratio = currentAspectRatio.ratio {
-                    // При фиксированном соотношении сторон верхние/нижние маркеры изменяют размер пропорционально
-                    let newY = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
-                    let newHeight = initialFrameInView.maxY - newY
-                    let newWidth = newHeight * ratio
-                    
-                    newFrameInView.origin.y = newY
-                    newFrameInView.size.height = newHeight
-                    newFrameInView.size.width = newWidth
-                    // Центрируем по горизонтали
-                    newFrameInView.origin.x = initialFrameInView.midX - newWidth / 2
-                } else {
-                    // Произвольный формат
-                    newFrameInView.origin.y = max(imageFrame.origin.y, min(initialFrameInView.maxY - minCropSize, initialFrameInView.origin.y + deltaY))
-                    newFrameInView.size.height = initialFrameInView.maxY - newFrameInView.origin.y
-                }
-                
-            case .bottom:
-                let deltaY = translation.y
-                
-                if let ratio = currentAspectRatio.ratio {
-                    // При фиксированном соотношении сторон верхние/нижние маркеры изменяют размер пропорционально
-                    let newHeight = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
-                    let newWidth = newHeight * ratio
-                    
-                    newFrameInView.size.height = newHeight
-                    newFrameInView.size.width = newWidth
-                    // Центрируем по горизонтали
-                    newFrameInView.origin.x = initialFrameInView.midX - newWidth / 2
-                } else {
-                    // Произвольный формат
-                    newFrameInView.size.height = max(minCropSize, min(imageFrame.maxY - initialFrameInView.origin.y, initialFrameInView.height + deltaY))
-                }
-            }
-            
-            // Конвертируем обратно в координаты photoContainerView
-            let newFrame = view.convert(newFrameInView, to: photoContainerView)
-            
-            // Получаем границы изображения в координатах photoContainerView
-            let imageFrameInContainer = photoContainerView.convert(imageView.frame, from: imageView.superview)
-            
-            // Применяем валидацию к новому фрейму
-            let constrainedFrame = validateAndConstrainCropFrame(newFrame, withinImageFrame: imageFrameInContainer)
-            
-            // Отладочная информация для проверки границ
-            if constrainedFrame != newFrame {
-                print("[Gesture Debug] Frame constrained from \(newFrame) to \(constrainedFrame)")
-                print("[Gesture Debug] Image bounds: \(imageFrameInContainer)")
-            }
-            
-            // Обновляем ограничения с ограниченными координатами
-            cropGridView.snp.remakeConstraints { make in
-                make.left.equalTo(photoContainerView).offset(constrainedFrame.origin.x)
-                make.top.equalTo(photoContainerView).offset(constrainedFrame.origin.y)
-                make.width.equalTo(constrainedFrame.width)
-                make.height.equalTo(constrainedFrame.height)
-            }
-            
-            // Принудительно обновляем layout
-            view.layoutIfNeeded()
-            
-            // Обновляем cropDragView чтобы он следовал за cropGridView (только центральная часть)
-            let currentCropFrame = cropGridView.frame
-            let minDragSize: CGFloat = 40 // Минимальный размер для перетягивания
-            
-            if currentCropFrame.width > 80 && currentCropFrame.height > 80 {
-                // Кроп достаточно большой для перетягивания
-                cropDragView.snp.remakeConstraints { make in
-                    make.center.equalTo(cropGridView)
-                    make.width.equalTo(cropGridView).offset(-60)
-                    make.height.equalTo(cropGridView).offset(-60)
-                }
-                cropDragView.isUserInteractionEnabled = true
-                cropDragView.alpha = 1.0
-            } else {
-                // Кроп слишком маленький - отключаем перетягивание
-                cropDragView.snp.remakeConstraints { make in
-                    make.center.equalTo(cropGridView)
-                    make.width.equalTo(minDragSize)
-                    make.height.equalTo(minDragSize)
-                }
-                cropDragView.isUserInteractionEnabled = false
-                cropDragView.alpha = 0.3 // Делаем полупрозрачным
-            }
-            
-            // Дополнительно обновляем layout чтобы убедиться что все компоненты синхронизированы
-            view.layoutIfNeeded()
-            
-            // Пересчитываем cropRect для overlay на основе обновленного cropGridView.frame
-            let updatedCropRectInView = photoContainerView.convert(cropGridView.frame, to: view)
-            cropOverlayView.cropRect = updatedCropRectInView
-            
-            // Обновляем позиции хендлов
-            updateCropHandlesPositions()
-            
-        case .ended, .cancelled:
-            // Сбрасываем состояние только для текущего активного жеста
-            if currentGestureHandle == handle {
-                print("Gesture ended on handle: \(handle.position)")
-                
-                // Дополнительно обновляем позиции хендлов при окончании жеста
-                DispatchQueue.main.async {
-                    self.updateCropHandlesPositions()
-                }
-                
-                initialCropFrame = nil
-                currentGestureHandle = nil
-            }
-            
-        default:
-            break
         }
     }
 }
@@ -1481,120 +1015,61 @@ extension PhotoEditorViewController {
     private func applyAspectRatio(_ format: AspectRatioFormat) {
         currentAspectRatio = format
         
-        // Сохраняем текущее положение и размер cropGridView
-        let currentCropFrame = cropGridView.frame
-        let currentCenter = cropGridView.center
-        
         guard let ratio = format.ratio else {
-            // Произвольный формат - не изменяем размер, только сбрасываем ограничения
+            // Произвольный формат - не изменяем размер
             return
         }
         
-        // Получаем размер контейнера
-        let containerSize = photoContainerView.bounds.size
-        let availableWidth = containerSize.width
-        let availableHeight = containerSize.height
+        // Получаем текущую область кропа
+        let currentCropRect = getCurrentCropRectInView()
+        let imageFrameInView = photoContainerView.convert(imageView.frame, to: view)
         
-        var newWidth: CGFloat
-        var newHeight: CGFloat
+        // Вычисляем новые размеры с сохранением центра
+        var newRect = currentCropRect
+        let currentArea = currentCropRect.width * currentCropRect.height
         
-        // Если у нас уже есть текущий размер, пытаемся сохранить масштаб
-        if !currentCropFrame.isEmpty {
-            let currentArea = currentCropFrame.width * currentCropFrame.height
-            
-            // Вычисляем новые размеры с сохранением площади (если возможно)
-            if ratio > 1.0 {
-                // Ландшафтная ориентация
-                newHeight = sqrt(currentArea / ratio)
-                newWidth = newHeight * ratio
-                
-                // Проверяем границы
-                if newWidth > availableWidth {
-                    newWidth = availableWidth
-                    newHeight = newWidth / ratio
-                }
-                if newHeight > availableHeight {
-                    newHeight = availableHeight
-                    newWidth = newHeight * ratio
-                }
-            } else {
-                // Портретная ориентация или квадрат
-                newWidth = sqrt(currentArea * ratio)
-                newHeight = newWidth / ratio
-                
-                // Проверяем границы
-                if newHeight > availableHeight {
-                    newHeight = availableHeight
-                    newWidth = newHeight * ratio
-                }
-                if newWidth > availableWidth {
-                    newWidth = availableWidth
-                    newHeight = newWidth / ratio
-                }
-            }
+        if ratio > 1.0 {
+            // Ландшафтная ориентация
+            newRect.size.height = sqrt(currentArea / ratio)
+            newRect.size.width = newRect.size.height * ratio
         } else {
-            // Если нет текущего размера, используем стандартную логику
-            if ratio > 1.0 {
-                newWidth = min(availableWidth * 0.8, availableHeight * 0.8 * ratio)
-                newHeight = newWidth / ratio
-            } else {
-                newHeight = min(availableHeight * 0.8, availableWidth * 0.8 / ratio)
-                newWidth = newHeight * ratio
-            }
+            // Портретная ориентация или квадрат
+            newRect.size.width = sqrt(currentArea * ratio)
+            newRect.size.height = newRect.size.width / ratio
         }
         
-        // Вычисляем безопасную позицию
-        let targetX = max(0, min(currentCenter.x - newWidth/2, containerSize.width - newWidth))
-        let targetY = max(0, min(currentCenter.y - newHeight/2, containerSize.height - newHeight))
+        // Центрируем относительно текущей позиции
+        newRect.origin.x = currentCropRect.midX - newRect.width / 2
+        newRect.origin.y = currentCropRect.midY - newRect.height / 2
         
-        // Отладочная информация для применения соотношения сторон
-        print("[AspectRatio Debug] Applied \(format.rawValue): \(newWidth)x\(newHeight) at (\(targetX), \(targetY))")
-        
-        // Обновляем размер cropGridView с безопасной позицией
-        cropGridView.snp.remakeConstraints { make in
-            make.left.equalTo(photoContainerView).offset(targetX)
-            make.top.equalTo(photoContainerView).offset(targetY)
-            make.width.equalTo(newWidth)
-            make.height.equalTo(newHeight)
+        // Ограничиваем границами изображения
+        if newRect.minX < imageFrameInView.minX {
+            newRect.origin.x = imageFrameInView.minX
+        }
+        if newRect.minY < imageFrameInView.minY {
+            newRect.origin.y = imageFrameInView.minY
+        }
+        if newRect.maxX > imageFrameInView.maxX {
+            newRect.origin.x = imageFrameInView.maxX - newRect.width
+        }
+        if newRect.maxY > imageFrameInView.maxY {
+            newRect.origin.y = imageFrameInView.maxY - newRect.height
         }
         
-        // Принудительно обновляем layout без анимации для корректного позиционирования
-        view.layoutIfNeeded()
-        
-        // Обновляем cropDragView чтобы он следовал за cropGridView
-        let updatedCropFrame = cropGridView.frame
-        if updatedCropFrame.width > 80 && updatedCropFrame.height > 80 {
-            cropDragView.snp.remakeConstraints { make in
-                make.center.equalTo(cropGridView)
-                make.width.equalTo(cropGridView).offset(-60)
-                make.height.equalTo(cropGridView).offset(-60)
-            }
-            cropDragView.isUserInteractionEnabled = true
-            cropDragView.alpha = 1.0
-        } else {
-            cropDragView.snp.remakeConstraints { make in
-                make.center.equalTo(cropGridView)
-                make.width.equalTo(40)
-                make.height.equalTo(40)
-            }
-            cropDragView.isUserInteractionEnabled = false
-            cropDragView.alpha = 0.3
+        // Если не помещается, уменьшаем размер
+        if newRect.width > imageFrameInView.width {
+            newRect.size.width = imageFrameInView.width
+            newRect.size.height = newRect.width / ratio
+            newRect.origin.x = imageFrameInView.minX
+        }
+        if newRect.height > imageFrameInView.height {
+            newRect.size.height = imageFrameInView.height
+            newRect.size.width = newRect.height * ratio
+            newRect.origin.y = imageFrameInView.minY
         }
         
-        // Еще один layout update для синхронизации всех компонентов
-        view.layoutIfNeeded()
-        
-        // Обновляем cropOverlayView на основе актуального фрейма
-        let cropRectInView = photoContainerView.convert(cropGridView.frame, to: view)
-        cropOverlayView.cropRect = cropRectInView
-        
-        // Обновляем позиции хендлов
-        updateCropHandlesPositions()
-        
-        // Добавляем небольшую анимацию для плавности
-        UIView.animate(withDuration: 0.2) {
-            self.view.layoutIfNeeded()
-        }
+        // Применяем новую область кропа
+        setCropRect(newRect, inView: true)
     }
 }
 

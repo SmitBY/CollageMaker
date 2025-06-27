@@ -175,23 +175,26 @@ class HomeViewController: UIViewController {
     
     private func updateTemplatesForSelectedPhotos() {
         let photoCount = selectedPhotos.count
+        let allTemplates = CollageTemplatesManager.shared.templates
         
         if photoCount == 0 {
-            // Показываем базовые шаблоны если ничего не выбрано
-            collageTemplates = generateBasicTemplates(for: 1) + 
-                              generateBasicTemplates(for: 2) + 
-                              generateBasicTemplates(for: 3) + 
-                              generateBasicTemplates(for: 4)
+            // Показываем все доступные шаблоны
+            collageTemplates = allTemplates
         } else {
-            // Показываем шаблоны для текущего количества фото и больше (до 9)
-            collageTemplates = []
-            for count in photoCount...min(photoCount + 5, 9) {
-                collageTemplates.append(contentsOf: generateBasicTemplates(for: count))
+            // Фильтруем шаблоны по количеству фотографий
+            collageTemplates = allTemplates.filter { template in
+                let requiredPhotos = template.positions.count
+                return requiredPhotos >= photoCount && requiredPhotos <= photoCount + 5
             }
             
-            // Если нет шаблонов, создаем базовые
+            // Если нет подходящих шаблонов, показываем все
             if collageTemplates.isEmpty {
-                collageTemplates = generateBasicTemplates(for: photoCount)
+                collageTemplates = allTemplates.filter { $0.positions.count >= photoCount }
+            }
+            
+            // Если все еще пусто, показываем все шаблоны
+            if collageTemplates.isEmpty {
+                collageTemplates = allTemplates
             }
         }
         
@@ -199,49 +202,7 @@ class HomeViewController: UIViewController {
         updateTemplatesLabel()
     }
     
-    private func generateBasicTemplates(for count: Int) -> [CollageTemplate] {
-        var templates: [CollageTemplate] = []
-        
-        switch count {
-        case 1:
-            templates.append(CollageTemplate(id: 100, name: "Single", positions: [(0, 0)]))
-        case 2:
-            templates.append(CollageTemplate(id: 101, name: "Horizontal 2", positions: [(0, 0), (1, 0)]))
-            templates.append(CollageTemplate(id: 102, name: "Vertical 2", positions: [(0, 0), (0, 1)]))
-        case 3:
-            templates.append(CollageTemplate(id: 103, name: "L-Shape 3", positions: [(0, 0), (1, 0), (0, 1)]))
-            templates.append(CollageTemplate(id: 104, name: "Row 3", positions: [(0, 0), (1, 0), (2, 0)]))
-            templates.append(CollageTemplate(id: 105, name: "Column 3", positions: [(0, 0), (0, 1), (0, 2)]))
-        case 4:
-            templates.append(CollageTemplate(id: 106, name: "Grid 2x2", positions: [(0, 0), (1, 0), (0, 1), (1, 1)]))
-            templates.append(CollageTemplate(id: 107, name: "Row 4", positions: [(0, 0), (1, 0), (2, 0), (3, 0)]))
-            templates.append(CollageTemplate(id: 108, name: "Column 4", positions: [(0, 0), (0, 1), (0, 2), (0, 3)]))
-        case 5:
-            templates.append(CollageTemplate(id: 109, name: "Cross 5", positions: [(1, 0), (0, 1), (1, 1), (2, 1), (1, 2)]))
-            templates.append(CollageTemplate(id: 110, name: "Row 5", positions: [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]))
-        case 6:
-            templates.append(CollageTemplate(id: 111, name: "Grid 2x3", positions: [(0, 0), (1, 0), (0, 1), (1, 1), (0, 2), (1, 2)]))
-            templates.append(CollageTemplate(id: 112, name: "Grid 3x2", positions: [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]))
-        case 7:
-            templates.append(CollageTemplate(id: 113, name: "Row 7", positions: [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0)]))
-        case 8:
-            templates.append(CollageTemplate(id: 114, name: "Grid 2x4", positions: [(0, 0), (1, 0), (0, 1), (1, 1), (0, 2), (1, 2), (0, 3), (1, 3)]))
-        case 9:
-            templates.append(CollageTemplate(id: 115, name: "Grid 3x3", positions: [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1), (0, 2), (1, 2), (2, 2)]))
-        default:
-            // Для большого количества фото создаем сетку
-            let gridSize = Int(ceil(sqrt(Double(count))))
-            var positions: [(Int, Int)] = []
-            for i in 0..<count {
-                let row = i / gridSize
-                let col = i % gridSize
-                positions.append((col, row))
-            }
-            templates.append(CollageTemplate(id: 200, name: "Grid \(gridSize)x\(gridSize)", positions: positions))
-        }
-        
-        return templates
-    }
+
     
     private func updatePhotosLabel() {
         let count = selectedPhotos.count
