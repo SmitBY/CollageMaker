@@ -831,15 +831,12 @@ class CollageEditorViewController: UIViewController {
     }
     
     private func changeBackground() {
-        let imagePicker = UIImagePickerController()
-        imagePicker.delegate = self
-        imagePicker.sourceType = .photoLibrary
-        imagePicker.allowsEditing = false
+        let backgroundPicker = BackgroundPickerViewController()
+        backgroundPicker.delegate = self
+        backgroundPicker.modalPresentationStyle = .overFullScreen
+        backgroundPicker.modalTransitionStyle = .crossDissolve
         
-        // Устанавливаем специальный тег для идентификации изменения фона
-        imagePicker.view.tag = 999
-        
-        present(imagePicker, animated: true, completion: nil)
+        present(backgroundPicker, animated: true, completion: nil)
     }
     
     private func selectTextLayer(_ textLayer: TextLayerView) {
@@ -981,10 +978,14 @@ class CollageEditorViewController: UIViewController {
         }
         defer { UIGraphicsEndImageContext() }
         
-        // Рисуем фоновое изображение или белый фон
+        // Рисуем фоновое изображение или цветной фон
         if let backgroundImage = backgroundImageView.image {
             // Рисуем фоновое изображение, растягивая его на весь финальный размер
             backgroundImage.draw(in: CGRect(origin: .zero, size: finalCollageSize))
+        } else if let backgroundColor = backgroundImageView.backgroundColor, backgroundColor != .clear {
+            // Если установлен цветной фон, заливаем этим цветом
+            backgroundColor.setFill()
+            context.fill(CGRect(origin: .zero, size: finalCollageSize))
         } else {
             // Если фона нет, заливаем белым цветом
             UIColor.white.setFill()
@@ -1707,6 +1708,42 @@ extension CollageEditorViewController: StickerPickerDelegate {
     }
 }
 
+// MARK: - BackgroundPickerDelegate
+extension CollageEditorViewController: BackgroundPickerDelegate {
+    func backgroundPicker(_ picker: BackgroundPickerViewController, didSelectColor color: UIColor) {
+        // Устанавливаем цветной фон
+        backgroundImageView.image = nil
+        backgroundImageView.backgroundColor = color
+    }
+    
+    func backgroundPicker(_ picker: BackgroundPickerViewController, didSelectImage image: UIImage) {
+        // Устанавливаем изображение как фон
+        backgroundImageView.backgroundColor = .clear
+        backgroundImageView.image = image
+    }
+    
+    func backgroundPickerDidRequestGallery(_ picker: BackgroundPickerViewController) {
+        // Сначала закрываем BackgroundPicker, затем открываем галерею
+        picker.dismiss(animated: true) { [weak self] in
+            DispatchQueue.main.async {
+                self?.openImagePickerForBackground()
+            }
+        }
+    }
+    
+    private func openImagePickerForBackground() {
+        let imagePicker = UIImagePickerController()
+        imagePicker.delegate = self
+        imagePicker.sourceType = .photoLibrary
+        imagePicker.allowsEditing = false
+        
+        // Устанавливаем специальный тег для идентификации изменения фона
+        imagePicker.view.tag = 999
+        
+        present(imagePicker, animated: true, completion: nil)
+    }
+}
+
 // MARK: - UIImagePickerControllerDelegate
 extension CollageEditorViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
@@ -1806,8 +1843,12 @@ extension CollageEditorViewController: AdvancedImageGestureHandlerDelegate {
     }
     
     func gestureHandler(_ handler: AdvancedImageGestureHandler, didTapImageView imageView: UIImageView) {
-        // Снимаем выделение со всех других элементов
-        gestureHandlers.forEach { $0.setSelected(false) }
+        // Снимаем выделение со всех других элементов (кроме текущего)
+        gestureHandlers.forEach { gestureHandler in
+            if gestureHandler !== handler {
+                gestureHandler.setSelected(false)
+            }
+        }
         textLayers.forEach { $0.setSelected(false) }
         stickerViews.forEach { $0.setSelected(false) }
         currentTextLayer = nil
@@ -1827,6 +1868,9 @@ extension CollageEditorViewController: AdvancedImageGestureHandlerDelegate {
                 currentIndexPath = IndexPath(item: index, section: 0)
                 presentImagePicker()
             }
+        } else {
+            // Для изображений с контентом показываем кнопку удаления
+            handler.updateDeleteButtonVisibility()
         }
     }
     
