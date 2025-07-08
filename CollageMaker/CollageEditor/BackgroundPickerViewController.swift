@@ -269,9 +269,7 @@ class BackgroundPickerViewController: UIViewController {
     private func loadBundleBackgrounds() -> [UIImage] {
         var images: [UIImage] = []
         
-        // Попробуем загрузить фоны разными способами
-        
-        // Способ 1: Через Bundle.main.path
+        // Способ 1: Поиск папки Backgrounds в bundle через Bundle.main.path
         if let bundlePath = Bundle.main.path(forResource: "Backgrounds", ofType: nil) {
             do {
                 let bundleContents = try FileManager.default.contentsOfDirectory(atPath: bundlePath)
@@ -279,78 +277,134 @@ class BackgroundPickerViewController: UIViewController {
                     let pathExtension = (filename as NSString).pathExtension.lowercased()
                     guard ["png", "jpg", "jpeg"].contains(pathExtension) else { return nil }
                     let fullPath = bundlePath + "/" + filename
+                    print("Загружаем фон: \(filename) из \(fullPath)")
                     return UIImage(contentsOfFile: fullPath)
                 }
                 images.append(contentsOf: bundleImages)
-                print("Способ 1: Загружено \(bundleImages.count) фонов из \(bundlePath)")
+                print("✅ Способ 1: Загружено \(bundleImages.count) фонов из \(bundlePath)")
             } catch {
-                print("Способ 1: Ошибка загрузки фонов из bundle: \(error)")
+                print("❌ Способ 1: Ошибка загрузки фонов из bundle: \(error)")
             }
+        } else {
+            print("❌ Способ 1: Папка Backgrounds не найдена через Bundle.main.path")
         }
         
-        // Способ 2: Через resourcePath
+        // Способ 2: Поиск через resourcePath + /Backgrounds
         if images.isEmpty, let resourcePath = Bundle.main.resourcePath {
             let backgroundsPath = resourcePath + "/Backgrounds"
+            print("Проверяем путь: \(backgroundsPath)")
+            
             if FileManager.default.fileExists(atPath: backgroundsPath) {
                 do {
                     let bundleContents = try FileManager.default.contentsOfDirectory(atPath: backgroundsPath)
+                    print("Найдены файлы в Backgrounds: \(bundleContents)")
+                    
                     let bundleImages = bundleContents.compactMap { filename -> UIImage? in
                         let pathExtension = (filename as NSString).pathExtension.lowercased()
-                        guard ["png", "jpg", "jpeg"].contains(pathExtension) else { return nil }
+                        guard ["png", "jpg", "jpeg"].contains(pathExtension) else { 
+                            print("Пропускаем файл (неподходящее расширение): \(filename)")
+                            return nil 
+                        }
                         let fullPath = backgroundsPath + "/" + filename
-                        return UIImage(contentsOfFile: fullPath)
-                    }
-                    images.append(contentsOf: bundleImages)
-                    print("Способ 2: Загружено \(bundleImages.count) фонов из \(backgroundsPath)")
-                } catch {
-                    print("Способ 2: Ошибка загрузки фонов: \(error)")
-                }
-            }
-        }
-        
-        // Способ 3: Прямая загрузка известных файлов из корня bundle
-        if images.isEmpty {
-            let knownBackgrounds = ["3d29796ba89570efd56d108a5c3ad58c.jpg"]
-            for filename in knownBackgrounds {
-                // Пробуем загрузить из корня bundle
-                if let image = UIImage(named: filename) {
-                    images.append(image)
-                    print("Способ 3a: Загружен фон \(filename) через UIImage(named:)")
-                } else if let bundlePath = Bundle.main.path(forResource: (filename as NSString).deletingPathExtension, ofType: (filename as NSString).pathExtension),
-                          let image = UIImage(contentsOfFile: bundlePath) {
-                    images.append(image)
-                    print("Способ 3b: Загружен фон из пути \(bundlePath)")
-                } else {
-                    print("Способ 3: Не удалось загрузить фон \(filename)")
-                }
-            }
-        }
-        
-        // Способ 4: Поиск всех изображений в корне bundle
-        if images.isEmpty {
-            if let bundlePath = Bundle.main.resourcePath {
-                do {
-                    let allFiles = try FileManager.default.contentsOfDirectory(atPath: bundlePath)
-                    let imageFiles = allFiles.filter { filename in
-                        let pathExtension = (filename as NSString).pathExtension.lowercased()
-                        return ["png", "jpg", "jpeg"].contains(pathExtension) && 
-                               !filename.hasPrefix("sticker") && 
-                               !filename.contains("image-") // Исключаем стикеры
-                    }
-                    
-                    for filename in imageFiles {
-                        let fullPath = bundlePath + "/" + filename
+                        print("Загружаем фон: \(filename) из \(fullPath)")
+                        
                         if let image = UIImage(contentsOfFile: fullPath) {
-                            images.append(image)
-                            print("Способ 4: Загружен фон \(filename) из корня bundle")
+                            print("✅ Успешно загружен: \(filename)")
+                            return image
+                        } else {
+                            print("❌ Не удалось загрузить: \(filename)")
+                            return nil
                         }
                     }
+                    images.append(contentsOf: bundleImages)
+                    print("✅ Способ 2: Загружено \(bundleImages.count) фонов из \(backgroundsPath)")
                 } catch {
-                    print("Способ 4: Ошибка чтения корня bundle: \(error)")
+                    print("❌ Способ 2: Ошибка загрузки фонов: \(error)")
+                }
+            } else {
+                print("❌ Способ 2: Папка \(backgroundsPath) не существует")
+            }
+        }
+        
+        // Способ 3: Поиск всех файлов в корне bundle (если папка Backgrounds не найдена)
+        if images.isEmpty, let resourcePath = Bundle.main.resourcePath {
+            print("Ищем фоны в корне bundle: \(resourcePath)")
+            do {
+                let allFiles = try FileManager.default.contentsOfDirectory(atPath: resourcePath)
+                print("Все файлы в bundle: \(allFiles.filter { $0.contains("jpg") || $0.contains("png") })")
+                
+                let imageFiles = allFiles.filter { filename in
+                    let pathExtension = (filename as NSString).pathExtension.lowercased()
+                    let isImage = ["png", "jpg", "jpeg"].contains(pathExtension)
+                    let isNotSticker = !filename.hasPrefix("sticker") && !filename.contains("image-")
+                    return isImage && isNotSticker
+                }
+                
+                print("Подходящие файлы для фонов: \(imageFiles)")
+                
+                for filename in imageFiles {
+                    let fullPath = resourcePath + "/" + filename
+                    if let image = UIImage(contentsOfFile: fullPath) {
+                        images.append(image)
+                        print("✅ Способ 3: Загружен фон \(filename) из корня bundle")
+                    } else {
+                        print("❌ Способ 3: Не удалось загрузить \(filename)")
+                    }
+                }
+            } catch {
+                print("❌ Способ 3: Ошибка чтения корня bundle: \(error)")
+            }
+        }
+        
+        // Способ 4: Прямая загрузка всех файлов из папки Backgrounds
+        // Поскольку папка не добавлена в bundle, загружаем файлы напрямую из файловой системы
+        let backgroundsDirectoryPath = Bundle.main.bundlePath + "/Backgrounds"
+        print("Проверяем прямой путь к папке: \(backgroundsDirectoryPath)")
+        
+        if FileManager.default.fileExists(atPath: backgroundsDirectoryPath) {
+            do {
+                let files = try FileManager.default.contentsOfDirectory(atPath: backgroundsDirectoryPath)
+                print("Найдены файлы в папке Backgrounds: \(files)")
+                
+                for filename in files {
+                    let pathExtension = (filename as NSString).pathExtension.lowercased()
+                    guard ["png", "jpg", "jpeg"].contains(pathExtension) else { continue }
+                    
+                    let fullPath = backgroundsDirectoryPath + "/" + filename
+                    if let image = UIImage(contentsOfFile: fullPath) {
+                        images.append(image)
+                        print("✅ Способ 4: Загружен фон \(filename)")
+                    } else {
+                        print("❌ Способ 4: Не удалось загрузить \(filename)")
+                    }
+                }
+            } catch {
+                print("❌ Способ 4: Ошибка чтения папки Backgrounds: \(error)")
+            }
+        } else {
+            print("❌ Способ 4: Папка Backgrounds не найдена по пути \(backgroundsDirectoryPath)")
+        }
+        
+        // Способ 5: Загрузка известных файлов через UIImage(named:) как fallback
+        if images.isEmpty {
+            let knownBackgrounds = [
+                "3d29796ba89570efd56d108a5c3ad58c",
+                "image",
+                "new-year-6615832_1280",
+                "fuzzy-hearts-9659075_1280"
+            ]
+            
+            for filename in knownBackgrounds {
+                if let image = UIImage(named: filename) {
+                    images.append(image)
+                    print("✅ Способ 5: Загружен фон \(filename) через UIImage(named:)")
+                } else {
+                    print("❌ Способ 5: Не удалось загрузить фон \(filename)")
                 }
             }
         }
         
+        print("🎯 Итого загружено фонов: \(images.count)")
         return images
     }
     

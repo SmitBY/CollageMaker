@@ -877,61 +877,59 @@ extension PhotoEditorViewController {
         print("[Crop Debug] PhotoContainer bounds: \(photoContainerView.bounds)")
         print("[Crop Debug] CropGridView frame: \(cropGridView.frame)")
         
-        // Находим видимую часть imageView (пересечение с photoContainerView)
-        let visibleImageRect = imageView.frame.intersection(photoContainerView.bounds)
-        print("[Crop Debug] Visible image rect: \(visibleImageRect)")
-        
-        // Проверяем, что есть видимая область
-        guard !visibleImageRect.isEmpty else {
-            print("[Crop Debug] No visible image area")
-            return originalImage
-        }
+        // Вычисляем фактический размер и позицию изображения внутри imageView с учетом contentMode .scaleAspectFit
+        let actualImageRect = calculateActualImageRect(for: originalImage, in: imageView)
+        print("[Crop Debug] Actual image rect in imageView: \(actualImageRect)")
         
         // Получаем фрейм cropGridView в координатах photoContainerView
         let cropRect = cropGridView.frame
         print("[Crop Debug] Crop rect in container: \(cropRect)")
         
-        // Вычисляем относительные координаты cropRect относительно видимой части изображения
-        let relativeX = (cropRect.origin.x - visibleImageRect.origin.x) / visibleImageRect.width
-        let relativeY = (cropRect.origin.y - visibleImageRect.origin.y) / visibleImageRect.height
-        let relativeWidth = cropRect.width / visibleImageRect.width
-        let relativeHeight = cropRect.height / visibleImageRect.height
+        // Конвертируем cropRect в координаты imageView
+        let cropRectInImageView = photoContainerView.convert(cropRect, to: imageView)
+        print("[Crop Debug] Crop rect in imageView: \(cropRectInImageView)")
         
-        print("[Crop Debug] Relative to visible: x=\(relativeX), y=\(relativeY), w=\(relativeWidth), h=\(relativeHeight)")
+        // Вычисляем пересечение cropRect с реальной областью изображения
+        let cropRectInActualImage = cropRectInImageView.intersection(actualImageRect)
+        print("[Crop Debug] Crop rect intersected with actual image: \(cropRectInActualImage)")
         
-        // Проверяем границы (crop должен быть внутри видимой области)
-        guard relativeX >= 0 && relativeY >= 0 && 
-              relativeX + relativeWidth <= 1.0 && relativeY + relativeHeight <= 1.0 else {
-            print("[Crop Debug] Crop rect is outside visible bounds")
+        // Проверяем, что есть пересечение
+        guard !cropRectInActualImage.isEmpty else {
+            print("[Crop Debug] No intersection with actual image")
             return originalImage
         }
         
-        // Теперь нужно вычислить, какая часть полного imageView является видимой
-        let visibleRelativeToFullX = (visibleImageRect.origin.x - imageView.frame.origin.x) / imageView.frame.width
-        let visibleRelativeToFullY = (visibleImageRect.origin.y - imageView.frame.origin.y) / imageView.frame.height
-        let visibleRelativeToFullWidth = visibleImageRect.width / imageView.frame.width
-        let visibleRelativeToFullHeight = visibleImageRect.height / imageView.frame.height
+        // Вычисляем относительные координаты относительно фактического изображения
+        let relativeX = (cropRectInActualImage.origin.x - actualImageRect.origin.x) / actualImageRect.width
+        let relativeY = (cropRectInActualImage.origin.y - actualImageRect.origin.y) / actualImageRect.height
+        let relativeWidth = cropRectInActualImage.width / actualImageRect.width
+        let relativeHeight = cropRectInActualImage.height / actualImageRect.height
         
-        print("[Crop Debug] Visible relative to full image: x=\(visibleRelativeToFullX), y=\(visibleRelativeToFullY), w=\(visibleRelativeToFullWidth), h=\(visibleRelativeToFullHeight)")
+        print("[Crop Debug] Relative coordinates: x=\(relativeX), y=\(relativeY), w=\(relativeWidth), h=\(relativeHeight)")
         
-        // Финальные координаты в полном изображении
-        let finalRelativeX = visibleRelativeToFullX + (relativeX * visibleRelativeToFullWidth)
-        let finalRelativeY = visibleRelativeToFullY + (relativeY * visibleRelativeToFullHeight)
-        let finalRelativeWidth = relativeWidth * visibleRelativeToFullWidth
-        let finalRelativeHeight = relativeHeight * visibleRelativeToFullHeight
-        
-        print("[Crop Debug] Final relative coordinates: x=\(finalRelativeX), y=\(finalRelativeY), w=\(finalRelativeWidth), h=\(finalRelativeHeight)")
+        // Ограничиваем координаты от 0 до 1
+        let clampedX = max(0, min(1, relativeX))
+        let clampedY = max(0, min(1, relativeY))
+        let clampedWidth = max(0, min(1 - clampedX, relativeWidth))
+        let clampedHeight = max(0, min(1 - clampedY, relativeHeight))
         
         // Переводим в координаты исходного изображения
         let imageSize = originalImage.size
-        let cropX = max(0, finalRelativeX * imageSize.width)
-        let cropY = max(0, finalRelativeY * imageSize.height)
-        let cropWidth = min(imageSize.width - cropX, finalRelativeWidth * imageSize.width)
-        let cropHeight = min(imageSize.height - cropY, finalRelativeHeight * imageSize.height)
+        let cropX = clampedX * imageSize.width
+        let cropY = clampedY * imageSize.height
+        let cropWidth = clampedWidth * imageSize.width
+        let cropHeight = clampedHeight * imageSize.height
         
         // Создаем CGRect для обрезки
         let cgCropRect = CGRect(x: cropX, y: cropY, width: cropWidth, height: cropHeight)
         print("[Crop Debug] Final crop rect: \(cgCropRect)")
+        
+        // Проверяем валидность области обрезки
+        guard cgCropRect.width > 0 && cgCropRect.height > 0 &&
+              cgCropRect.maxX <= imageSize.width && cgCropRect.maxY <= imageSize.height else {
+            print("[Crop Debug] Invalid crop rect")
+            return originalImage
+        }
         
         // Обрезаем изображение
         guard let cgImage = originalImage.cgImage?.cropping(to: cgCropRect) else { 
@@ -943,6 +941,31 @@ extension PhotoEditorViewController {
         let croppedImage = UIImage(cgImage: cgImage, scale: originalImage.scale, orientation: originalImage.imageOrientation)
         print("[Crop Debug] Successfully cropped image to size: \(croppedImage.size)")
         return croppedImage
+    }
+    
+    /// Вычисляет фактический прямоугольник изображения внутри imageView с учетом contentMode .scaleAspectFit
+    private func calculateActualImageRect(for image: UIImage, in imageView: UIImageView) -> CGRect {
+        let imageViewSize = imageView.bounds.size
+        let imageSize = image.size
+        
+        // Вычисляем коэффициент масштабирования для scaleAspectFit
+        let scaleX = imageViewSize.width / imageSize.width
+        let scaleY = imageViewSize.height / imageSize.height
+        let scale = min(scaleX, scaleY)
+        
+        // Вычисляем размер изображения после масштабирования
+        let scaledImageSize = CGSize(
+            width: imageSize.width * scale,
+            height: imageSize.height * scale
+        )
+        
+        // Вычисляем позицию изображения (центрирование)
+        let imageOrigin = CGPoint(
+            x: (imageViewSize.width - scaledImageSize.width) / 2,
+            y: (imageViewSize.height - scaledImageSize.height) / 2
+        )
+        
+        return CGRect(origin: imageOrigin, size: scaledImageSize)
     }
 }
 

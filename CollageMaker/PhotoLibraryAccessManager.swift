@@ -18,25 +18,35 @@ class PhotoLibraryAccessManager {
     func checkPhotoLibraryAccess(completion: @escaping (Bool) -> Void) {
         // Get the current authorization status for reading and writing.
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        
+        print("📸 Текущий статус доступа к Photos: \(status.rawValue)")
+        
         switch status {
         case .authorized, .limited:
             // Access already granted.
+            print("✅ Доступ к Photos разрешен")
             completion(true)
         case .denied, .restricted:
             // Access has been denied or restricted.
+            print("❌ Доступ к Photos запрещен или ограничен")
             completion(false)
         case .notDetermined:
             // Request access.
+            print("🔄 Запрашиваем доступ к Photos...")
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
                 DispatchQueue.main.async {
+                    print("📸 Новый статус доступа к Photos: \(newStatus.rawValue)")
                     if newStatus == .authorized || newStatus == .limited {
+                        print("✅ Доступ к Photos предоставлен")
                         completion(true)
                     } else {
+                        print("❌ Доступ к Photos отклонен")
                         completion(false)
                     }
                 }
             }
         @unknown default:
+            print("❓ Неизвестный статус доступа к Photos")
             completion(false)
         }
     }

@@ -1,14 +1,33 @@
 import UIKit
 import SnapKit
 
+// MARK: - Protocols
+
 protocol StickerPickerDelegate: AnyObject {
     func stickerPicker(_ picker: StickerPickerViewController, didSelectSticker image: UIImage)
+}
+
+protocol MultiStickerPickerDelegate: AnyObject {
+    func stickerPicker(_ picker: StickerPickerViewController, didSelectMultipleStickers images: [UIImage])
 }
 
 class StickerPickerViewController: UIViewController {
     
     // MARK: - Properties
     weak var delegate: StickerPickerDelegate?
+    weak var multiDelegate: MultiStickerPickerDelegate?
+    
+    // Режим выбора
+    private var isMultiSelectionMode = false
+    private let maxSelectionCount = 10
+    
+    // Категории и стикеры
+    private var categorizedStickers: [StickerCategory: [StickerItem]] = [:]
+    private var currentCategory: StickerCategory = .frequentlyUsed
+    private var availableCategories: [StickerCategory] = []
+    
+    // UI Components
+    private let categoryTabView = CategoryTabView()
     
     private let collectionView: UICollectionView = {
         let layout = UICollectionViewFlowLayout()
@@ -18,6 +37,7 @@ class StickerPickerViewController: UIViewController {
         
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.backgroundColor = .systemBackground
+        collectionView.allowsMultipleSelection = true
         return collectionView
     }()
     
@@ -36,57 +56,30 @@ class StickerPickerViewController: UIViewController {
         return button
     }()
     
-    // Массив доступных стикеров (будет заполнен динамически)
-    private var availableStickers: [StickerItem] = []
+    // Кнопка переключения режима
+    private let modeToggleButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("Множественный", for: .normal)
+        button.setImage(UIImage(systemName: "square"), for: .normal)
+        button.setImage(UIImage(systemName: "checkmark.square"), for: .selected)
+        button.tintColor = .systemBlue
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 16)
+        return button
+    }()
     
-    // Статический массив эмодзи и системных иконок
-    private let defaultStickers: [StickerItem] = [
-        // Эмодзи
-        StickerItem(type: .emoji, content: "😀"),
-        StickerItem(type: .emoji, content: "😍"),
-        StickerItem(type: .emoji, content: "🤣"),
-        StickerItem(type: .emoji, content: "😎"),
-        StickerItem(type: .emoji, content: "🥳"),
-        StickerItem(type: .emoji, content: "😇"),
-        StickerItem(type: .emoji, content: "🤔"),
-        StickerItem(type: .emoji, content: "😴"),
-        StickerItem(type: .emoji, content: "🤗"),
-        StickerItem(type: .emoji, content: "😘"),
-        StickerItem(type: .emoji, content: "❤️"),
-        StickerItem(type: .emoji, content: "💕"),
-        StickerItem(type: .emoji, content: "💖"),
-        StickerItem(type: .emoji, content: "✨"),
-        StickerItem(type: .emoji, content: "🌟"),
-        StickerItem(type: .emoji, content: "⭐"),
-        StickerItem(type: .emoji, content: "🎉"),
-        StickerItem(type: .emoji, content: "🎊"),
-        StickerItem(type: .emoji, content: "🎈"),
-        StickerItem(type: .emoji, content: "🎁"),
-        StickerItem(type: .emoji, content: "🌈"),
-        StickerItem(type: .emoji, content: "☀️"),
-        StickerItem(type: .emoji, content: "🌙"),
-        StickerItem(type: .emoji, content: "⚡"),
-        StickerItem(type: .emoji, content: "🔥"),
-        StickerItem(type: .emoji, content: "💎"),
-        StickerItem(type: .emoji, content: "🌸"),
-        StickerItem(type: .emoji, content: "🌺"),
-        StickerItem(type: .emoji, content: "🌻"),
-        StickerItem(type: .emoji, content: "🎵"),
-        
-        // Системные иконки
-        StickerItem(type: .systemIcon, content: "heart.fill"),
-        StickerItem(type: .systemIcon, content: "star.fill"),
-        StickerItem(type: .systemIcon, content: "bolt.fill"),
-        StickerItem(type: .systemIcon, content: "flame.fill"),
-        StickerItem(type: .systemIcon, content: "crown.fill"),
-        StickerItem(type: .systemIcon, content: "diamond.fill"),
-        StickerItem(type: .systemIcon, content: "sparkles"),
-        StickerItem(type: .systemIcon, content: "sun.max.fill"),
-        StickerItem(type: .systemIcon, content: "moon.fill"),
-        StickerItem(type: .systemIcon, content: "cloud.fill"),
-        StickerItem(type: .systemIcon, content: "snowflake"),
-        StickerItem(type: .systemIcon, content: "leaf.fill")
-    ]
+    // Кнопка применения выбранных
+    private let applySelectionButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("Добавить выбранные (0)", for: .normal)
+        button.backgroundColor = .systemBlue
+        button.setTitleColor(.white, for: .normal)
+        button.layer.cornerRadius = 8
+        button.isHidden = true
+        return button
+    }()
+    
+    // Массив стикеров текущей категории
+    private var currentCategoryStickers: [StickerItem] = []
     
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -98,7 +91,8 @@ class StickerPickerViewController: UIViewController {
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        loadAllStickers()
+        loadCategorizedStickers()
+        preloadCurrentCategoryImages()
     }
     
     // MARK: - Setup
@@ -110,9 +104,15 @@ class StickerPickerViewController: UIViewController {
         collectionView.delegate = self
         collectionView.dataSource = self
         
+        // Настройка CategoryTabView
+        categoryTabView.delegate = self
+        
         view.addSubview(titleLabel)
         view.addSubview(closeButton)
+        view.addSubview(modeToggleButton)
+        view.addSubview(categoryTabView)
         view.addSubview(collectionView)
+        view.addSubview(applySelectionButton)
     }
     
     private func setupConstraints() {
@@ -127,67 +127,153 @@ class StickerPickerViewController: UIViewController {
             make.width.height.equalTo(30)
         }
         
-        collectionView.snp.makeConstraints { make in
+        modeToggleButton.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(20)
+            make.leading.equalToSuperview().offset(20)
+            make.height.equalTo(30)
+        }
+        
+        categoryTabView.snp.makeConstraints { make in
             make.top.equalTo(titleLabel.snp.bottom).offset(20)
-            make.leading.trailing.bottom.equalToSuperview()
+            make.leading.trailing.equalToSuperview()
+            make.height.equalTo(60)
+        }
+        
+        collectionView.snp.makeConstraints { make in
+            make.top.equalTo(categoryTabView.snp.bottom)
+            make.leading.trailing.equalToSuperview()
+            make.bottom.equalTo(applySelectionButton.snp.top).offset(-20)
+        }
+        
+        applySelectionButton.snp.makeConstraints { make in
+            make.bottom.equalTo(view.safeAreaLayoutGuide).inset(20)
+            make.leading.trailing.equalToSuperview().inset(20)
+            make.height.equalTo(50)
         }
     }
     
     private func setupActions() {
         closeButton.addTarget(self, action: #selector(closeButtonTapped), for: .touchUpInside)
+        modeToggleButton.addTarget(self, action: #selector(modeToggleButtonTapped), for: .touchUpInside)
+        applySelectionButton.addTarget(self, action: #selector(applySelectionButtonTapped), for: .touchUpInside)
     }
     
     @objc private func closeButtonTapped() {
         dismiss(animated: true)
     }
     
-    // MARK: - Sticker Loading
-    private func loadAllStickers() {
-        var allStickers: [StickerItem] = []
-        
-        // Добавляем стикеры из Assets
-        let assetStickers = loadAssetStickers()
-        allStickers.append(contentsOf: assetStickers)
-        
-        // Добавляем эмодзи и системные иконки
-        allStickers.append(contentsOf: defaultStickers)
-        
-        availableStickers = allStickers
-        collectionView.reloadData()
+    @objc private func modeToggleButtonTapped() {
+        isMultiSelectionMode.toggle()
+        updateModeUI()
+        clearAllSelections()
     }
     
-    private func loadAssetStickers() -> [StickerItem] {
-        var assetStickers: [StickerItem] = []
+    @objc private func applySelectionButtonTapped() {
+        let selectedStickers = currentCategoryStickers.filter { $0.isSelected }
+        let selectedImages = selectedStickers.compactMap { $0.generateImage() }
         
-        // Список всех стикеров в папке Bundle
-        let stickerNames = [
-            "sticker_01", "sticker_02", "sticker_03", "sticker_04", "sticker_05",
-            "image-DFOtpQFrS2TDZYYTKpe3t1xzBXxyqN", "image-nI4awJxBtlfLCLZ7nqsHrh1qJ6AcSI",
-            "image-SLW4v3ZRvj7Si9YqPiWqBSY3K1J03w", "image-590phLtyyJKpI5cBKwpJTC0PQxprv2"
-        ]
-        
-        print("Проверяем стикеры...")
-        
-        // Проверяем каждый стикер
-        for stickerName in stickerNames {
-            if UIImage(named: stickerName) != nil {
-                print("Найден стикер: \(stickerName)")
-                let stickerItem = StickerItem(type: .bundleImage, content: stickerName)
-                assetStickers.append(stickerItem)
-            } else {
-                print("Стикер не найден: \(stickerName)")
+        if !selectedImages.isEmpty {
+            // Отмечаем стикеры как использованные
+            for sticker in selectedStickers {
+                StickerManager.shared.markStickerAsUsed(sticker)
             }
+            
+            multiDelegate?.stickerPicker(self, didSelectMultipleStickers: selectedImages)
+            dismiss(animated: true)
+        }
+    }
+    
+    private func updateModeUI() {
+        modeToggleButton.isSelected = isMultiSelectionMode
+        modeToggleButton.setTitle(isMultiSelectionMode ? "Одиночный" : "Множественный", for: .normal)
+        applySelectionButton.isHidden = !isMultiSelectionMode
+        titleLabel.text = isMultiSelectionMode ? "Выберите стикеры" : "Выберите стикер"
+        
+        updateSelectionCountUI()
+    }
+    
+    private func updateSelectionCountUI() {
+        if isMultiSelectionMode {
+            let selectedCount = currentCategoryStickers.filter { $0.isSelected }.count
+            applySelectionButton.setTitle("Добавить выбранные (\(selectedCount))", for: .normal)
+            applySelectionButton.isEnabled = selectedCount > 0
+            applySelectionButton.alpha = selectedCount > 0 ? 1.0 : 0.6
+        }
+    }
+    
+    private func clearAllSelections() {
+        for i in 0..<currentCategoryStickers.count {
+            currentCategoryStickers[i].isSelected = false
+        }
+        collectionView.reloadData()
+        updateSelectionCountUI()
+    }
+    
+    // MARK: - Sticker Loading
+    private func loadCategorizedStickers() {
+        categorizedStickers = StickerManager.shared.getAllStickers()
+        availableCategories = StickerCategory.allCases.filter { categorizedStickers[$0]?.isEmpty == false }
+        
+        // Устанавливаем категорию по умолчанию (если часто используемые пусты, то эмоции)
+        if categorizedStickers[.frequentlyUsed]?.isEmpty == true {
+            currentCategory = .emotions
         }
         
-        print("Загружено \(assetStickers.count) стикеров из Bundle")
-        return assetStickers
+        categoryTabView.configure(with: availableCategories, selectedCategory: currentCategory)
+        updateCurrentCategoryStickers()
+    }
+    
+    private func updateCurrentCategoryStickers() {
+        currentCategoryStickers = categorizedStickers[currentCategory] ?? []
+        
+        // Анимированное обновление коллекции
+        UIView.transition(with: collectionView, duration: 0.3, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+            self.collectionView.reloadData()
+        } completion: { _ in
+            // Анимация появления ячеек по очереди
+            self.animateVisibleCells()
+        }
+        
+        updateSelectionCountUI()
+    }
+    
+    private func animateVisibleCells() {
+        let visibleCells = collectionView.visibleCells
+        
+        // Сначала скрываем все ячейки
+        visibleCells.forEach { cell in
+            cell.alpha = 0
+            cell.transform = CGAffineTransform(scaleX: 0.3, y: 0.3)
+        }
+        
+        // Затем анимируем их появление по очереди
+        for (index, cell) in visibleCells.enumerated() {
+            UIView.animate(withDuration: 0.4, delay: Double(index) * 0.05, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.5, options: [.allowUserInteraction]) {
+                cell.alpha = 1.0
+                cell.transform = .identity
+            }
+        }
+    }
+    
+    private func preloadCurrentCategoryImages() {
+        // Предзагружаем изображения текущей категории
+        StickerImageCache.shared.preloadImages(for: currentCategoryStickers)
+        
+        // Предзагружаем изображения других категорий в фоне
+        DispatchQueue.global(qos: .background).async {
+            for (category, stickers) in self.categorizedStickers {
+                if category != self.currentCategory {
+                    StickerImageCache.shared.preloadImages(for: stickers)
+                }
+            }
+        }
     }
 }
 
 // MARK: - UICollectionViewDataSource
 extension StickerPickerViewController: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return availableStickers.count
+        return currentCategoryStickers.count
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
@@ -196,13 +282,21 @@ extension StickerPickerViewController: UICollectionViewDataSource {
             return UICollectionViewCell()
         }
         
-        guard indexPath.item < availableStickers.count else {
-            print("Ошибка: индекс \(indexPath.item) выходит за границы массива размером \(availableStickers.count)")
+        guard indexPath.item < currentCategoryStickers.count else {
+            print("Ошибка: индекс \(indexPath.item) выходит за границы массива размером \(currentCategoryStickers.count)")
             return cell
         }
         
-        let stickerItem = availableStickers[indexPath.item]
+        let stickerItem = currentCategoryStickers[indexPath.item]
         cell.configure(with: stickerItem)
+        
+        // Устанавливаем состояние выбора ячейки в соответствии с режимом
+        if isMultiSelectionMode && stickerItem.isSelected {
+            collectionView.selectItem(at: indexPath, animated: false, scrollPosition: [])
+        } else {
+            collectionView.deselectItem(at: indexPath, animated: false)
+        }
+        
         return cell
     }
 }
@@ -210,11 +304,63 @@ extension StickerPickerViewController: UICollectionViewDataSource {
 // MARK: - UICollectionViewDelegate
 extension StickerPickerViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        let stickerItem = availableStickers[indexPath.item]
+        guard indexPath.item < currentCategoryStickers.count else { return }
         
-        if let image = stickerItem.generateImage() {
-            delegate?.stickerPicker(self, didSelectSticker: image)
-            dismiss(animated: true)
+        if isMultiSelectionMode {
+            // Множественный выбор
+            let currentlySelected = currentCategoryStickers.filter { $0.isSelected }.count
+            
+            if currentCategoryStickers[indexPath.item].isSelected {
+                // Убираем выбор
+                currentCategoryStickers[indexPath.item].isSelected = false
+            } else {
+                // Добавляем выбор (с ограничением)
+                if currentlySelected < maxSelectionCount {
+                    currentCategoryStickers[indexPath.item].isSelected = true
+                } else {
+                    // Показываем предупреждение о лимите
+                    let alert = UIAlertController(
+                        title: "Лимит выбора", 
+                        message: "Можно выбрать максимум \(maxSelectionCount) стикеров",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "ОК", style: .default))
+                    present(alert, animated: true)
+                    
+                    // Убираем выделение ячейки
+                    collectionView.deselectItem(at: indexPath, animated: true)
+                    return
+                }
+            }
+            
+            // Обновляем ячейку
+            if let cell = collectionView.cellForItem(at: indexPath) as? StickerCell {
+                cell.setSelected(currentCategoryStickers[indexPath.item].isSelected)
+            }
+            
+            updateSelectionCountUI()
+        } else {
+            // Одиночный выбор
+            let stickerItem = currentCategoryStickers[indexPath.item]
+            
+            if let image = stickerItem.generateImage() {
+                // Отмечаем стикер как использованный
+                StickerManager.shared.markStickerAsUsed(stickerItem)
+                
+                delegate?.stickerPicker(self, didSelectSticker: image)
+                dismiss(animated: true)
+            }
+        }
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, didDeselectItemAt indexPath: IndexPath) {
+        // Этот метод вызывается только в множественном режиме
+        if isMultiSelectionMode && indexPath.item < currentCategoryStickers.count {
+            currentCategoryStickers[indexPath.item].isSelected = false
+            if let cell = collectionView.cellForItem(at: indexPath) as? StickerCell {
+                cell.setSelected(false)
+            }
+            updateSelectionCountUI()
         }
     }
 }
@@ -227,99 +373,14 @@ extension StickerPickerViewController: UICollectionViewDelegateFlowLayout {
     }
 }
 
-// MARK: - StickerItem
-struct StickerItem {
-    enum StickerType {
-        case emoji
-        case systemIcon
-        case assetImage
-        case bundleImage
-    }
-    
-    let type: StickerType
-    let content: String
-    
-    func generateImage(size: CGSize = CGSize(width: 60, height: 60)) -> UIImage? {
-        switch type {
-        case .emoji:
-            return generateEmojiImage(emoji: content, size: size)
-        case .systemIcon:
-            return generateSystemIconImage(iconName: content, size: size)
-        case .assetImage:
-            return UIImage(named: content)
-        case .bundleImage:
-            return UIImage(named: content)
-        }
-    }
-    
-    private func generateEmojiImage(emoji: String, size: CGSize) -> UIImage? {
-        UIGraphicsBeginImageContextWithOptions(size, false, 0)
-        defer { UIGraphicsEndImageContext() }
-        
-        let font = UIFont.systemFont(ofSize: size.width * 0.7)
-        let attributes: [NSAttributedString.Key: Any] = [.font: font]
-        let textSize = emoji.size(withAttributes: attributes)
-        
-        let rect = CGRect(
-            x: (size.width - textSize.width) / 2,
-            y: (size.height - textSize.height) / 2,
-            width: textSize.width,
-            height: textSize.height
-        )
-        
-        emoji.draw(in: rect, withAttributes: attributes)
-        return UIGraphicsGetImageFromCurrentImageContext()
-    }
-    
-    private func generateSystemIconImage(iconName: String, size: CGSize) -> UIImage? {
-        let config = UIImage.SymbolConfiguration(pointSize: size.width * 0.6, weight: .medium)
-        return UIImage(systemName: iconName, withConfiguration: config)?.withTintColor(.systemBlue, renderingMode: .alwaysOriginal)
+// MARK: - CategoryTabViewDelegate
+extension StickerPickerViewController: CategoryTabViewDelegate {
+    func categoryTabView(_ view: CategoryTabView, didSelectCategory category: StickerCategory) {
+        currentCategory = category
+        updateCurrentCategoryStickers()
+        clearAllSelections()
+        preloadCurrentCategoryImages()
     }
 }
 
-// MARK: - StickerCell
-class StickerCell: UICollectionViewCell {
-    static let identifier = "StickerCell"
-    
-    private let imageView = UIImageView()
-    
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        setupCell()
-    }
-    
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    
-    private func setupCell() {
-        backgroundColor = .systemGray6
-        layer.cornerRadius = 12
-        
-        imageView.contentMode = .scaleAspectFit
-        contentView.addSubview(imageView)
-        
-        imageView.snp.makeConstraints { make in
-            make.center.equalToSuperview()
-            make.width.height.equalTo(40)
-        }
-    }
-    
-    func configure(with stickerItem: StickerItem) {
-        if stickerItem.type == .assetImage {
-            // Для файловых стикеров используем оригинальный размер
-            imageView.contentMode = .scaleAspectFit
-            imageView.image = stickerItem.generateImage()
-        } else {
-            // Для эмодзи и иконок используем стандартный размер
-            imageView.contentMode = .scaleAspectFit
-            imageView.image = stickerItem.generateImage()
-        }
-    }
-    
-    override var isSelected: Bool {
-        didSet {
-            backgroundColor = isSelected ? .systemBlue.withAlphaComponent(0.3) : .systemGray6
-        }
-    }
-} 
+ 

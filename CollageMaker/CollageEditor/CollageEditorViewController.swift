@@ -1810,6 +1810,48 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
         
         imageView.isUserInteractionEnabled = true
     }
+
+    // MARK: - Photo Editor Integration
+    
+    private func openPhotoEditor(with image: UIImage, for imageView: UIImageView) {
+        guard image != UIImage(named: "placeholder"),
+              let coordinator = coordinator else {
+            print("❌ Не удалось открыть PhotoEditor")
+            return
+        }
+        
+        print("🎨 Открываем PhotoEditor для редактирования изображения")
+        
+        coordinator.showPhotoEditor(with: image) { [weak self, weak imageView] editedImage in
+            guard let self = self, let imageView = imageView else { return }
+            
+            if let editedImage = editedImage {
+                print("✅ Получено отредактированное изображение из PhotoEditor")
+                
+                // Находим индекс изображения для обновления модели
+                if let tileView = imageView.superview,
+                   let gridContainer = self.collageView.viewWithTag(self.gridContainerTag),
+                   let index = gridContainer.subviews.firstIndex(of: tileView) {
+                    
+                    // Обновляем изображение в UI
+                    imageView.image = editedImage
+                    
+                    // Обновляем модель
+                    let indexPath = IndexPath(item: index, section: 0)
+                    self.viewModel.setImage(at: indexPath, image: editedImage)
+                    
+                    // Обновляем selectedPhotos массив
+                    if index < self.selectedPhotos.count {
+                        self.selectedPhotos[index] = editedImage
+                    }
+                    
+                    print("✅ Изображение обновлено в позиции \(index)")
+                }
+            } else {
+                print("ℹ️ Редактирование отменено пользователем")
+            }
+        }
+    }
 }
 
 // MARK: - AdvancedImageGestureHandlerDelegate
@@ -1869,7 +1911,10 @@ extension CollageEditorViewController: AdvancedImageGestureHandlerDelegate {
                 presentImagePicker()
             }
         } else {
-            // Для изображений с контентом показываем кнопку удаления
+            // Для изображений с контентом открываем PhotoEditor
+            if let currentImage = imageView.image {
+                openPhotoEditor(with: currentImage, for: imageView)
+            }
             handler.updateDeleteButtonVisibility()
         }
     }
