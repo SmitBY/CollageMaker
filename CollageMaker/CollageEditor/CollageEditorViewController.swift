@@ -11,6 +11,117 @@ import RxSwift
 import RxCocoa
 import Photos
 
+// MARK: - Aspect Ratio Model
+struct AspectRatio {
+    let id: String
+    let name: String
+    let ratio: CGFloat // width / height
+    let width: Int
+    let height: Int
+    let displayName: String
+    let isPopular: Bool
+    
+    init(id: String, name: String, width: Int, height: Int, displayName: String, isPopular: Bool = false) {
+        self.id = id
+        self.name = name
+        self.width = width
+        self.height = height
+        self.ratio = CGFloat(width) / CGFloat(height)
+        self.displayName = displayName
+        self.isPopular = isPopular
+    }
+    
+    /// Calculates the size for a given container width
+    func sizeForWidth(_ width: CGFloat) -> CGSize {
+        return CGSize(width: width, height: width / ratio)
+    }
+    
+    /// Calculates the size for a given container height
+    func sizeForHeight(_ height: CGFloat) -> CGSize {
+        return CGSize(width: height * ratio, height: height)
+    }
+}
+
+// MARK: - Aspect Ratio Manager
+class AspectRatioManager {
+    static let shared = AspectRatioManager()
+    
+    private init() {}
+    
+    /// Предустановленные соотношения сторон для Instagram
+    let instagramRatios: [AspectRatio] = [
+        AspectRatio(id: "square", name: "Квадрат", width: 1, height: 1, displayName: "1:1", isPopular: true),
+        AspectRatio(id: "portrait", name: "Портрет", width: 4, height: 5, displayName: "4:5", isPopular: true),
+        AspectRatio(id: "story", name: "Stories", width: 9, height: 16, displayName: "9:16", isPopular: true)
+    ]
+
+    
+    /// Все доступные соотношения сторон
+    var allRatios: [AspectRatio] {
+        return instagramRatios
+    }
+    
+    /// Популярные соотношения сторон
+    var popularRatios: [AspectRatio] {
+        return instagramRatios.filter { $0.isPopular }
+    }
+    
+    /// Найти соотношение сторон по ID
+    func ratio(by id: String) -> AspectRatio? {
+        return allRatios.first { $0.id == id }
+    }
+    
+    /// Найти ближайшее соотношение сторон для данного размера
+    func closestRatio(for size: CGSize) -> AspectRatio {
+        let targetRatio = size.width / size.height
+        
+        return allRatios.min { ratio1, ratio2 in
+            abs(ratio1.ratio - targetRatio) < abs(ratio2.ratio - targetRatio)
+        } ?? instagramRatios[0] // Возвращаем квадрат по умолчанию
+    }
+    
+    /// Получить оптимальный размер для контейнера с учетом соотношения сторон
+    func optimalSize(for aspectRatio: AspectRatio, in containerSize: CGSize, margin: CGFloat = 20) -> CGSize {
+        let availableWidth = containerSize.width - margin * 2
+        let availableHeight = containerSize.height - margin * 2
+        
+        // Вычисляем максимальный размер для каждого направления
+        let maxSizeByWidth = aspectRatio.sizeForWidth(availableWidth)
+        let maxSizeByHeight = aspectRatio.sizeForHeight(availableHeight)
+        
+        // Выбираем размер, который лучше помещается в контейнер
+        if maxSizeByWidth.height <= availableHeight && maxSizeByWidth.width <= availableWidth {
+            return maxSizeByWidth
+        } else if maxSizeByHeight.width <= availableWidth && maxSizeByHeight.height <= availableHeight {
+            return maxSizeByHeight
+        } else {
+            // Если ни один не помещается идеально, выбираем меньший
+            let areaByWidth = maxSizeByWidth.width * min(maxSizeByWidth.height, availableHeight)
+            let areaByHeight = min(maxSizeByHeight.width, availableWidth) * maxSizeByHeight.height
+            
+            return areaByWidth > areaByHeight ? 
+                CGSize(width: maxSizeByWidth.width, height: min(maxSizeByWidth.height, availableHeight)) :
+                CGSize(width: min(maxSizeByHeight.width, availableWidth), height: maxSizeByHeight.height)
+        }
+    }
+}
+
+// MARK: - UserDefaults Extension for AspectRatio
+extension UserDefaults {
+    private enum Keys {
+        static let selectedAspectRatioId = "SelectedAspectRatioId"
+    }
+    
+    var selectedAspectRatioId: String {
+        get {
+            return string(forKey: Keys.selectedAspectRatioId) ?? "square"
+        }
+        set {
+            set(newValue, forKey: Keys.selectedAspectRatioId)
+        }
+    }
+}
+
 /// View controller for the Collage Editor screen.
 /// It is initialized with a CollageEditorViewModel.
 class CollageEditorViewController: UIViewController {
@@ -31,6 +142,12 @@ class CollageEditorViewController: UIViewController {
     private let addTextButton = UIButton(type: .system)
     private let addStickerButton = UIButton(type: .system)
     private let changeBackgroundButton = UIButton(type: .system)
+    
+    // Aspect Ratio Selector
+    private let aspectRatioScrollView = UIScrollView()
+    private let aspectRatioStackView = UIStackView()
+    private var aspectRatioButtons: [UIButton] = []
+    private var currentAspectRatio: AspectRatio
     
     // Контейнер для ползунков
     private let slidersContainerView = UIView()
@@ -99,8 +216,20 @@ class CollageEditorViewController: UIViewController {
     init(viewModel: CollageEditorViewModel, selectedPhotos: [UIImage] = []) {
         self.viewModel = viewModel
         self.selectedPhotos = selectedPhotos
+        
+        // Инициализируем текущее соотношение сторон
+        let savedRatioId = UserDefaults.standard.selectedAspectRatioId
+        self.currentAspectRatio = AspectRatioManager.shared.ratio(by: savedRatioId) ?? AspectRatioManager.shared.instagramRatios[0]
+        
         super.init(nibName: nil, bundle: nil)
-        print("[CollageEditorViewController] init(viewModel:) called")
+        
+        // Загружаем сохраненное значение расстояния
+        let savedMargin = UserDefaults.standard.double(forKey: "currentInnerMargin")
+        if savedMargin > 0 {
+            self.currentInnerMargin = CGFloat(savedMargin)
+        }
+        
+        print("[CollageEditorViewController] init(viewModel:) called, restored margin: \(currentInnerMargin)")
     }
     
     required init?(coder: NSCoder) {
@@ -114,6 +243,10 @@ class CollageEditorViewController: UIViewController {
         print("[CollageEditorViewController] viewDidLoad called")
         setupUI()
         setupBindings()
+        
+        // Инициализируем ползунки с сохраненными значениями
+        spacingSlider.value = Float(currentInnerMargin)
+        spacingLabel.text = "Расстояние: \(Int(currentInnerMargin))"
         
         if let template = viewModel.collageTemplate.value {
             setupCollageView(with: template)
@@ -173,7 +306,11 @@ class CollageEditorViewController: UIViewController {
         slidersContainerView.layer.borderWidth = 1
         slidersContainerView.layer.borderColor = UIColor.systemGray4.cgColor
         
+        // Настройка селектора соотношений сторон
+        setupAspectRatioSelector()
+        
         // Добавляем элементы на view
+        view.addSubview(aspectRatioScrollView)
         view.addSubview(collageView)
         view.addSubview(slidersContainerView)
         view.addSubview(saveButton)
@@ -191,8 +328,14 @@ class CollageEditorViewController: UIViewController {
         slidersContainerView.addSubview(spacingSlider)
         
         // Настройка constraints
+        aspectRatioScrollView.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(10)
+            make.leading.trailing.equalToSuperview()
+            make.height.equalTo(80)
+        }
+        
         collageView.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide).offset(20)
+            make.top.equalTo(aspectRatioScrollView.snp.bottom).offset(10)
             make.leading.trailing.equalToSuperview().inset(20)
             make.bottom.equalTo(slidersContainerView.snp.top).offset(-10)
         }
@@ -535,8 +678,7 @@ class CollageEditorViewController: UIViewController {
     // MARK: - Collage View Setup
     
     /// Configures the collage view based on the provided template.
-    /// The preview displays a grid of square tiles with white borders and placeholder images,
-    /// centered in collageView. Special templates (2x2 grid with one tile stretched) обрабатываются.
+    /// Настройка области коллажа с учетом выбранного соотношения сторон
     private func setupCollageView(with template: CollageTemplate) {
         // Очищаем старый коллаж, кроме backgroundImageView
         collageView.subviews.forEach { subview in
@@ -549,25 +691,24 @@ class CollageEditorViewController: UIViewController {
         currentColumnWidths.removeAll()
         currentRowHeights.removeAll()
         
+        // Синхронизируем ползунок с текущим значением margin
+        spacingSlider.value = Float(currentInnerMargin)
+        spacingLabel.text = "Расстояние: \(Int(currentInnerMargin))"
+        
         // Force layout update to obtain correct bounds.
         view.layoutIfNeeded()
-        print("Setting up collage view with template: \(template.name)")
+        print("Setting up collage view with template: \(template.name), aspect ratio: \(currentAspectRatio.displayName), spacing: \(Int(currentInnerMargin))")
         
-        // Define margins.
-        let outerMargin: CGFloat = 16
-        let innerMargin: CGFloat = 8
+        // Define margins - используем текущие значения ползунков
+        let innerMargin = currentInnerMargin
+        let outerMargin = max(currentInnerMargin, 8) // Синхронизируем с ползунком
         
         // Определяем, является ли шаблон специальным.
         let specialTemplates = ["Left Tall, Right Two", "Right Tall, Left Two", "Top Long, Bottom Two", "Bottom Long, Top Two"]
-        let _ = ["Wave Split 2", "Curve Split 2", "Zigzag 2", "Triangle 3", "Fan 3", "Steps 3", 
-                 "Diamond 4", "Windmill 4", "Pyramid 4", "Spiral 4", "Heart 7", "Circle 4", 
-                 "Puzzle 4", "Film Strip 4", "Plus 5", "Star 5", "Hexagon 6", "Flower 6", 
-                 "Octagon 8", "Polaroid Stack", "Scattered Photos"]
         
         let columns: Int
         let rows: Int
         if specialTemplates.contains(template.name) {
-            // Для специальных шаблонов считаем фиксированную сетку 2x2.
             columns = 2
             rows = 2
         } else {
@@ -575,66 +716,73 @@ class CollageEditorViewController: UIViewController {
             rows = (template.positions.map { $0.1 }.max() ?? 0) + 1
         }
         
-        // Получаем размер collageView и создаем квадратную область
+        // Получаем размер collageView
         let containerWidth = collageView.bounds.width > 0 ? collageView.bounds.width : 200
         let containerHeight = collageView.bounds.height > 0 ? collageView.bounds.height : 200
         
-        // Определяем размер квадратной области (минимальная сторона минус отступы)
-        let maxAvailableSize = min(containerWidth, containerHeight) - 2 * outerMargin
+        // Определяем оптимальный размер рабочей области с учетом соотношения сторон
+        let availableSize = CGSize(width: containerWidth - 2 * outerMargin, height: containerHeight - 2 * outerMargin)
+        let workAreaSize = AspectRatioManager.shared.optimalSize(for: currentAspectRatio, in: availableSize, margin: 0)
         
-        // Вычисляем размер стандартной плитки для квадратной сетки
+        // Вычисляем размеры плиток исходя из рабочей области (не квадрата!)
         let totalHorizontalSpacing = innerMargin * CGFloat(columns - 1)
         let totalVerticalSpacing = innerMargin * CGFloat(rows - 1)
-        let tileSide = min((maxAvailableSize - totalHorizontalSpacing) / CGFloat(columns),
-                           (maxAvailableSize - totalVerticalSpacing) / CGFloat(rows))
         
-        // Размер всей сетки (квадрат).
-        let gridContentWidth = CGFloat(columns) * tileSide + totalHorizontalSpacing
-        let gridContentHeight = CGFloat(rows) * tileSide + totalVerticalSpacing
-        let gridSize = max(gridContentWidth, gridContentHeight) + 2 * outerMargin
+        // Размер плиток должен адаптироваться под соотношение сторон
+        let tileWidth = (workAreaSize.width - totalHorizontalSpacing) / CGFloat(columns)
+        let tileHeight = (workAreaSize.height - totalVerticalSpacing) / CGFloat(rows)
+        
+        // Размер контейнера сетки точно соответствует выбранному соотношению
+        let gridWidth = workAreaSize.width
+        let gridHeight = workAreaSize.height
         
         // Убеждаемся, что фоновое изображение находится в самом низу стека
         collageView.sendSubviewToBack(backgroundImageView)
         
         // Создаем контейнер для сетки и центрируем его в collageView.
         let gridContainer = UIView()
-        gridContainer.backgroundColor = .clear
-        gridContainer.layer.borderColor = UIColor.lightGray.cgColor
-        gridContainer.layer.borderWidth = 1
+        gridContainer.backgroundColor = UIColor.systemGray6.withAlphaComponent(0.3)
+        gridContainer.layer.borderColor = UIColor.systemBlue.cgColor
+        gridContainer.layer.borderWidth = 2
         gridContainer.layer.cornerRadius = 8
         gridContainer.tag = gridContainerTag
         collageView.addSubview(gridContainer)
         gridContainer.snp.makeConstraints { make in
-            make.center.equalToSuperview()
-            make.width.height.equalTo(gridSize) // Квадратный контейнер
+            make.centerX.equalToSuperview()
+            make.centerY.equalToSuperview()
+            make.width.equalTo(gridWidth)
+            make.height.equalTo(gridHeight)
+            // ВАЖНО: Убеждаемся что gridContainer не выходит за пределы с учетом outerMargin
+            make.leading.greaterThanOrEqualToSuperview().offset(outerMargin)
+            make.trailing.lessThanOrEqualToSuperview().offset(-outerMargin)
+            make.top.greaterThanOrEqualToSuperview().offset(outerMargin)
+            make.bottom.lessThanOrEqualToSuperview().offset(-outerMargin)
         }
         
-        // Вычисляем смещения для центрирования содержимого в квадрате
-        let contentOffsetX = (gridSize - gridContentWidth) / 2
-        let contentOffsetY = (gridSize - gridContentHeight) / 2
-        
-        // Для каждого элемента шаблона создаем tileView.
+        // Для каждого элемента шаблона создаем tileView с прямоугольными размерами
         for (index, position) in template.positions.enumerated() {
             let col = CGFloat(position.0)
             let row = CGFloat(position.1)
             
-            // Начальный расчет: каждая плитка стандартного размера с центрированием
-            var tileFrame = CGRect(x: contentOffsetX + col * (tileSide + innerMargin),
-                                   y: contentOffsetY + row * (tileSide + innerMargin),
-                                   width: tileSide,
-                                   height: tileSide)
+            // Расчет позиции и размера плитки с учетом реального соотношения сторон
+            var tileFrame = CGRect(
+                x: col * (tileWidth + innerMargin),
+                y: row * (tileHeight + innerMargin),
+                width: tileWidth,
+                height: tileHeight
+            )
             
             // Специальная обработка для шаблонов:
             if template.name == "Left Tall, Right Two" && position == (0, 0) {
                 // Левая плитка растягивается по высоте (занимает 2 ряда).
-                tileFrame.size.height = tileSide * 2 + innerMargin
+                tileFrame.size.height = tileHeight * 2 + innerMargin
             } else if template.name == "Right Tall, Left Two" && position == (1, 0) {
-                tileFrame.size.height = tileSide * 2 + innerMargin
+                tileFrame.size.height = tileHeight * 2 + innerMargin
             } else if template.name == "Top Long, Bottom Two" && position == (0, 0) {
                 // Верхняя плитка растягивается по ширине (занимает 2 столбца).
-                tileFrame.size.width = tileSide * 2 + innerMargin
+                tileFrame.size.width = tileWidth * 2 + innerMargin
             } else if template.name == "Bottom Long, Top Two" && position == (0, 1) {
-                tileFrame.size.width = tileSide * 2 + innerMargin
+                tileFrame.size.width = tileWidth * 2 + innerMargin
             }
             
             let tileView = UIView()
@@ -664,6 +812,11 @@ class CollageEditorViewController: UIViewController {
             // Настраиваем взаимодействие с пользователем
             tileView.isUserInteractionEnabled = true
             imageView.isUserInteractionEnabled = true
+            imageView.tag = index
+            
+            // Добавляем gesture recognizer для выбора изображения
+            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(selectImageForTile(_:)))
+            imageView.addGestureRecognizer(tapGesture)
             
             gridContainer.addSubview(tileView)
             
@@ -676,8 +829,8 @@ class CollageEditorViewController: UIViewController {
             }
         }
         
-        // Инициализируем базовые размеры сетки
-        initializeGridSizes(for: template, containerSize: CGSize(width: maxAvailableSize, height: maxAvailableSize))
+        // Инициализируем базовые размеры сетки с учетом соотношения сторон
+        initializeGridSizes(for: template, containerSize: workAreaSize)
         
         // Добавляем слайдеры между соседними фотографиями
         setupResizableSliders(for: template, in: gridContainer)
@@ -735,8 +888,8 @@ class CollageEditorViewController: UIViewController {
     // MARK: - Grid Size Management
     
     private func initializeGridSizes(for template: CollageTemplate, containerSize: CGSize) {
-        let outerMargin: CGFloat = 16
-        let innerMargin: CGFloat = 8
+        let innerMargin = currentInnerMargin
+        let outerMargin = max(currentInnerMargin, 8)
         
         // Определяем размеры сетки
         let columns = (template.positions.map { $0.0 }.max() ?? 0) + 1
@@ -762,6 +915,13 @@ class CollageEditorViewController: UIViewController {
         borderViews.forEach { $0.removeFromSuperview() }
         borderViews.removeAll()
         
+        // Не создаем границы для специальных шаблонов с растянутыми плитками
+        let specialTemplates = ["Left Tall, Right Two", "Right Tall, Left Two", "Top Long, Bottom Two", "Bottom Long, Top Two"]
+        if specialTemplates.contains(template.name) {
+            print("⚠️ Ползунки изменения размера отключены для специального шаблона: \(template.name)")
+            return
+        }
+        
         // Определяем, где нужны границы (между соседними фотографиями)
         for i in 0..<template.positions.count {
             for j in (i+1)..<template.positions.count {
@@ -773,13 +933,21 @@ class CollageEditorViewController: UIViewController {
                 let isVerticalNeighbors = abs(pos1.1 - pos2.1) == 1 && pos1.0 == pos2.0
                 
                 if isHorizontalNeighbors || isVerticalNeighbors {
-                    guard let tile1 = gridContainer.viewWithTag(i),
-                          let tile2 = gridContainer.viewWithTag(j) else { continue }
+                    // Ищем плитки по индексу в массиве subviews
+                    guard i < gridContainer.subviews.count, 
+                          j < gridContainer.subviews.count else { continue }
+                    
+                    let tile1 = gridContainer.subviews[i]
+                    let tile2 = gridContainer.subviews[j]
+                    
+                    // Проверяем, что это действительно плитки (не служебные view)
+                    guard tile1.tag < 1000, tile2.tag < 1000 else { continue }
                     
                     let borderView = BorderDragView()
                     borderView.isVertical = isHorizontalNeighbors
                     borderView.delegate = self
                     borderView.tag = i * 100 + j // Уникальный тег для идентификации
+                    borderView.ratio = 0.5 // Начальное соотношение
                     
                     gridContainer.addSubview(borderView)
                     
@@ -802,9 +970,12 @@ class CollageEditorViewController: UIViewController {
                     }
                     
                     borderViews.append(borderView)
+                    print("🔧 Создана граница между плитками \(i) и \(j), тип: \(isHorizontalNeighbors ? "вертикальная" : "горизонтальная")")
                 }
             }
         }
+        
+        print("✅ Создано \(borderViews.count) границ для изменения размеров")
     }
     
     // MARK: - Text Layers
@@ -960,8 +1131,9 @@ class CollageEditorViewController: UIViewController {
             return
         }
         
-        // Final collage image size: 2400 x 2400 pixels (квадрат).
-        let finalCollageSize = CGSize(width: 2400, height: 2400)
+        // Вычисляем финальный размер изображения на основе выбранного соотношения сторон
+        let baseWidth: CGFloat = 2400
+        let finalCollageSize = currentAspectRatio.sizeForWidth(baseWidth)
         
         // Получаем gridContainer для определения текущих пропорций
         guard let gridContainer = collageView.viewWithTag(gridContainerTag) else {
@@ -994,11 +1166,15 @@ class CollageEditorViewController: UIViewController {
         
         // Вычисляем масштаб для перевода из текущих размеров в финальные
         let currentGridSize = gridContainer.bounds.size
-        let scale = finalCollageSize.width / max(currentGridSize.width, currentGridSize.height)
+        let scaleX = finalCollageSize.width / currentGridSize.width
+        let scaleY = finalCollageSize.height / currentGridSize.height
+        let scale = min(scaleX, scaleY)
         
-        // Вычисляем смещение для центрирования в квадрате
-        let offsetX = (finalCollageSize.width - currentGridSize.width * scale) / 2
-        let offsetY = (finalCollageSize.height - currentGridSize.height * scale) / 2
+        // Вычисляем смещение для центрирования
+        let scaledGridWidth = currentGridSize.width * scale
+        let scaledGridHeight = currentGridSize.height * scale
+        let offsetX = (finalCollageSize.width - scaledGridWidth) / 2
+        let offsetY = (finalCollageSize.height - scaledGridHeight) / 2
         
         // Получаем текущее значение закругления углов
         let currentCornerRadius = CGFloat(cornerRadiusSlider.value)
@@ -1070,11 +1246,7 @@ class CollageEditorViewController: UIViewController {
             // Восстанавливаем состояние контекста
             context.restoreGState()
             
-            // Рисуем белую рамку поверх с текущим закруглением
-            let borderPath = UIBezierPath(roundedRect: scaledTileFrame, cornerRadius: currentCornerRadius * scale)
-            UIColor.white.setStroke()
-            borderPath.lineWidth = 2.0 * scale
-            borderPath.stroke()
+            // Не рисуем рамки - они нужны только для редактирования, а не для финального изображения
         }
         
         // Рисуем текстовые слои поверх коллажа
@@ -1167,7 +1339,7 @@ class CollageEditorViewController: UIViewController {
             
             // Сохраняем в галерею приложения
             let templateName = viewModel.collageTemplate.value?.name ?? "Неизвестный шаблон"
-            let savedCollage = SavedCollage(image: finalImage, templateName: templateName)
+            let savedCollage = SavedCollage(image: finalImage, templateName: templateName, aspectRatioId: currentAspectRatio.id)
             SavedCollagesManager.shared.saveCollage(savedCollage)
             
             print("Final collage image saved successfully!")
@@ -1226,16 +1398,28 @@ class CollageEditorViewController: UIViewController {
         // Сохраняем новое значение расстояния
         currentInnerMargin = spacing
         
+        // Сохраняем в UserDefaults для сохранения состояния
+        UserDefaults.standard.set(spacing, forKey: "currentInnerMargin")
+        
+        // Сохраняем текущие изображения
+        let savedImages = saveCurrentImages()
+        
         // Перестраиваем layout коллажа с новым расстоянием
         if let template = viewModel.collageTemplate.value {
-            rebuildCollageLayout(with: template, newInnerMargin: spacing)
+            rebuildCollageLayoutWithAspectRatio(with: template, newInnerMargin: spacing)
+            
+            // Восстанавливаем изображения
+            DispatchQueue.main.async {
+                self.restoreImages(savedImages)
+            }
         }
     }
     
-    private func rebuildCollageLayout(with template: CollageTemplate, newInnerMargin: CGFloat) {
+    private func rebuildCollageLayoutWithAspectRatio(with template: CollageTemplate, newInnerMargin: CGFloat) {
         guard let gridContainer = collageView.viewWithTag(gridContainerTag) else { return }
         
-        let outerMargin: CGFloat = 16
+        // Используем то же значение расстояния для внешних отступов
+        let outerMargin: CGFloat = max(newInnerMargin, 8) // Минимум 8px для удобности
         
         // Определяем размеры сетки
         let specialTemplates = ["Left Tall, Right Two", "Right Tall, Left Two", "Top Long, Bottom Two", "Bottom Long, Top Two"]
@@ -1253,51 +1437,99 @@ class CollageEditorViewController: UIViewController {
         let containerWidth = collageView.bounds.width > 0 ? collageView.bounds.width : 200
         let containerHeight = collageView.bounds.height > 0 ? collageView.bounds.height : 200
         
-        // Определяем размер квадратной области
-        let maxAvailableSize = min(containerWidth, containerHeight) - 2 * outerMargin
+        // Определяем оптимальный размер рабочей области с учетом новых внешних отступов
+        let availableSize = CGSize(width: containerWidth - 2 * outerMargin, height: containerHeight - 2 * outerMargin)
+        let workAreaSize = AspectRatioManager.shared.optimalSize(for: currentAspectRatio, in: availableSize, margin: 0)
         
-        // Вычисляем размер стандартной плитки с новым расстоянием
+        // КРИТИЧНО: Сохраняем существующие размеры BorderDragView или инициализируем базовыми
         let totalHorizontalSpacing = newInnerMargin * CGFloat(columns - 1)
         let totalVerticalSpacing = newInnerMargin * CGFloat(rows - 1)
-        let tileSide = min((maxAvailableSize - totalHorizontalSpacing) / CGFloat(columns),
-                           (maxAvailableSize - totalVerticalSpacing) / CGFloat(rows))
         
-        // Размер всей сетки
-        let gridContentWidth = CGFloat(columns) * tileSide + totalHorizontalSpacing
-        let gridContentHeight = CGFloat(rows) * tileSide + totalVerticalSpacing
-        let gridSize = max(gridContentWidth, gridContentHeight) + 2 * outerMargin
+        var columnWidths = currentColumnWidths
+        var rowHeights = currentRowHeights
         
-        // Обновляем размер gridContainer
-        gridContainer.snp.updateConstraints { make in
-            make.width.height.equalTo(gridSize)
+        // Если размеры не установлены, инициализируем равномерными
+        if columnWidths.isEmpty || rowHeights.isEmpty {
+            let baseColumnWidth = (workAreaSize.width - totalHorizontalSpacing) / CGFloat(columns)
+            let baseRowHeight = (workAreaSize.height - totalVerticalSpacing) / CGFloat(rows)
+            
+            columnWidths = Array(repeating: baseColumnWidth, count: columns)
+            rowHeights = Array(repeating: baseRowHeight, count: rows)
+        } else {
+            // Масштабируем существующие размеры под новую рабочую область
+            let currentTotalWidth = columnWidths.reduce(0, +)
+            let currentTotalHeight = rowHeights.reduce(0, +)
+            
+            let newTotalWidth = workAreaSize.width - totalHorizontalSpacing
+            let newTotalHeight = workAreaSize.height - totalVerticalSpacing
+            
+            let widthScale = newTotalWidth / currentTotalWidth
+            let heightScale = newTotalHeight / currentTotalHeight
+            
+            columnWidths = columnWidths.map { $0 * widthScale }
+            rowHeights = rowHeights.map { $0 * heightScale }
         }
         
-        // Вычисляем смещения для центрирования содержимого в квадрате
-        let contentOffsetX = (gridSize - gridContentWidth) / 2
-        let contentOffsetY = (gridSize - gridContentHeight) / 2
+        // Сохраняем обновленные размеры
+        currentColumnWidths = columnWidths
+        currentRowHeights = rowHeights
         
-        // Обновляем позиции всех плиток
+        // Размер контейнера сетки точно соответствует выбранному соотношению
+        let gridWidth = workAreaSize.width
+        let gridHeight = workAreaSize.height
+        
+        // Обновляем размер gridContainer с учетом outerMargin
+        gridContainer.snp.remakeConstraints { make in
+            make.centerX.equalToSuperview()
+            make.centerY.equalToSuperview()
+            make.width.equalTo(gridWidth)
+            make.height.equalTo(gridHeight)
+            // ВАЖНО: Убеждаемся что gridContainer не выходит за пределы с учетом outerMargin
+            make.leading.greaterThanOrEqualToSuperview().offset(outerMargin)
+            make.trailing.lessThanOrEqualToSuperview().offset(-outerMargin)
+            make.top.greaterThanOrEqualToSuperview().offset(outerMargin)
+            make.bottom.lessThanOrEqualToSuperview().offset(-outerMargin)
+        }
+        
+        // Обновляем позиции всех плиток с учетом сохраненных размеров BorderDragView
         for (index, position) in template.positions.enumerated() {
             guard let tileView = gridContainer.subviews[safe: index] else { continue }
             
-            let col = CGFloat(position.0)
-            let row = CGFloat(position.1)
+            let col = position.0
+            let row = position.1
             
-            // Начальный расчет
-            var tileFrame = CGRect(x: contentOffsetX + col * (tileSide + newInnerMargin),
-                                   y: contentOffsetY + row * (tileSide + newInnerMargin),
-                                   width: tileSide,
-                                   height: tileSide)
+            // Вычисляем позицию плитки с учетом переменных размеров колонок и строк
+            var x: CGFloat = 0
+            for i in 0..<col {
+                x += columnWidths[i] + newInnerMargin
+            }
             
-            // Специальная обработка для шаблонов
+            var y: CGFloat = 0
+            for i in 0..<row {
+                y += rowHeights[i] + newInnerMargin
+            }
+            
+            // Базовые размеры плитки
+            var tileWidth = columnWidths[col]
+            var tileHeight = rowHeights[row]
+            
+            // Расчет позиции и размера плитки с учетом переменных размеров
+            var tileFrame = CGRect(
+                x: x,
+                y: y,
+                width: tileWidth,
+                height: tileHeight
+            )
+            
+            // Специальная обработка для расширенных плиток
             if template.name == "Left Tall, Right Two" && position == (0, 0) {
-                tileFrame.size.height = tileSide * 2 + newInnerMargin
+                tileFrame.size.height = rowHeights[0] + rowHeights[1] + newInnerMargin
             } else if template.name == "Right Tall, Left Two" && position == (1, 0) {
-                tileFrame.size.height = tileSide * 2 + newInnerMargin
+                tileFrame.size.height = rowHeights[0] + rowHeights[1] + newInnerMargin
             } else if template.name == "Top Long, Bottom Two" && position == (0, 0) {
-                tileFrame.size.width = tileSide * 2 + newInnerMargin
+                tileFrame.size.width = columnWidths[0] + columnWidths[1] + newInnerMargin
             } else if template.name == "Bottom Long, Top Two" && position == (0, 1) {
-                tileFrame.size.width = tileSide * 2 + newInnerMargin
+                tileFrame.size.width = columnWidths[0] + columnWidths[1] + newInnerMargin
             }
             
             // Обновляем constraints плитки
@@ -1307,12 +1539,42 @@ class CollageEditorViewController: UIViewController {
                 make.width.equalTo(tileFrame.size.width)
                 make.height.equalTo(tileFrame.size.height)
             }
+            
+            // Перенастраиваем gesture recognizer для тапа на imageView
+            if let imageView = tileView.subviews.first as? UIImageView {
+                // Удаляем старые gesture recognizers
+                imageView.gestureRecognizers?.removeAll()
+                
+                // Добавляем новый tap gesture
+                let tapGesture = UITapGestureRecognizer(target: self, action: #selector(selectImageForTile(_:)))
+                imageView.addGestureRecognizer(tapGesture)
+                imageView.isUserInteractionEnabled = true
+                imageView.tag = index
+            }
         }
+        
+        // ВАЖНО: Обновляем позиции BorderDragView вместо пересоздания (сохраняет состояние)
+        updateBorderDragViewPositions(for: template, in: gridContainer)
+        
+        // Принудительно обновляем layout
+        gridContainer.layoutIfNeeded()
         
         // Анимируем изменения
         UIView.animate(withDuration: 0.3) {
             self.view.layoutIfNeeded()
         }
+        
+        print("🔄 Обновлены внутренние и внешние отступы (\(Int(newInnerMargin))px) с сохранением соотношения \(currentAspectRatio.displayName)")
+    }
+    
+    /// Обновляет позиции BorderDragView после изменения размеров сетки
+    private func updateBorderDragViewPositions(for template: CollageTemplate, in gridContainer: UIView) {
+        // Удаляем старые BorderDragView
+        borderViews.forEach { $0.removeFromSuperview() }
+        borderViews.removeAll()
+        
+        // Создаем новые BorderDragView с обновленными позициями
+        setupResizableSliders(for: template, in: gridContainer)
     }
     
     // MARK: - Helper Methods
@@ -1433,163 +1695,206 @@ extension CollageEditorViewController: BorderDragViewDelegate {
         guard let gridContainer = collageView.viewWithTag(gridContainerTag),
               let template = viewModel.collageTemplate.value else { return }
         
+        // Сохраняем текущие изображения
+        let savedImages = saveCurrentImages()
+        
         // Получаем индексы плиток из тега границы
         let index1 = view.tag / 100
         let index2 = view.tag % 100
         
-        let pos1 = template.positions[index1]
-        let pos2 = template.positions[index2]
-        
-        // Определяем направление изменения размера
-        let isHorizontal = pos1.1 == pos2.1
-        
-        // Пересчитываем размеры всей сетки
-        recalculateGridLayout(template: template, 
-                            gridContainer: gridContainer, 
-                            changedIndex1: index1, 
-                            changedIndex2: index2, 
-                            ratio: ratio, 
-                            isHorizontal: isHorizontal)
+        // Пересчитываем размеры с учетом соотношения сторон
+        recalculateGridLayoutWithAspectRatio(template: template, 
+                                           gridContainer: gridContainer, 
+                                           changedIndex1: index1, 
+                                           changedIndex2: index2, 
+                                           ratio: ratio)
         
         // Плавная анимация изменений
-        UIView.animate(withDuration: 0.1, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState], animations: {
+        UIView.animate(withDuration: 0.15, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState], animations: {
             gridContainer.layoutIfNeeded()
-        })
+        }) { _ in
+            // Восстанавливаем изображения после изменения layout
+            self.restoreImages(savedImages)
+        }
     }
     
-    private func recalculateGridLayout(template: CollageTemplate, 
-                                     gridContainer: UIView, 
-                                     changedIndex1: Int, 
-                                     changedIndex2: Int, 
-                                     ratio: CGFloat, 
-                                     isHorizontal: Bool) {
+    private func recalculateGridLayoutWithAspectRatio(template: CollageTemplate, 
+                                                    gridContainer: UIView, 
+                                                    changedIndex1: Int, 
+                                                    changedIndex2: Int, 
+                                                    ratio: CGFloat) {
         
-        let outerMargin: CGFloat = 16
-        let innerMargin: CGFloat = 8
+        // Используем текущие значения отступов (синхронизированные с ползунком)
+        let innerMargin = currentInnerMargin
+        let outerMargin = max(currentInnerMargin, 8)
         
-        // Используем текущие размеры вместо пересчета с нуля
+        // Определяем размеры сетки
+        let specialTemplates = ["Left Tall, Right Two", "Right Tall, Left Two", "Top Long, Bottom Two", "Bottom Long, Top Two"]
+        let columns: Int
+        let rows: Int
+        if specialTemplates.contains(template.name) {
+            columns = 2
+            rows = 2
+        } else {
+            columns = (template.positions.map { $0.0 }.max() ?? 0) + 1
+            rows = (template.positions.map { $0.1 }.max() ?? 0) + 1
+        }
+        
+        // Получаем размер collageView
+        let containerWidth = collageView.bounds.width > 0 ? collageView.bounds.width : 200
+        let containerHeight = collageView.bounds.height > 0 ? collageView.bounds.height : 200
+        
+        // Определяем оптимальный размер рабочей области с учетом соотношения сторон
+        let availableSize = CGSize(width: containerWidth - 2 * outerMargin, height: containerHeight - 2 * outerMargin)
+        let workAreaSize = AspectRatioManager.shared.optimalSize(for: currentAspectRatio, in: availableSize, margin: 0)
+        
+        // Инициализируем или используем текущие размеры
         var columnWidths = currentColumnWidths
         var rowHeights = currentRowHeights
         
-        // Если массивы пустые (первый запуск), инициализируем их
+        // Если массивы пустые, инициализируем базовыми значениями
         if columnWidths.isEmpty || rowHeights.isEmpty {
-            let containerSize = gridContainer.bounds.size
-            initializeGridSizes(for: template, containerSize: containerSize)
-            columnWidths = currentColumnWidths
-            rowHeights = currentRowHeights
+            let totalHorizontalSpacing = innerMargin * CGFloat(columns - 1)
+            let totalVerticalSpacing = innerMargin * CGFloat(rows - 1)
+            
+            let baseColumnWidth = (workAreaSize.width - totalHorizontalSpacing) / CGFloat(columns)
+            let baseRowHeight = (workAreaSize.height - totalVerticalSpacing) / CGFloat(rows)
+            
+            columnWidths = Array(repeating: baseColumnWidth, count: columns)
+            rowHeights = Array(repeating: baseRowHeight, count: rows)
         }
         
         // Применяем изменения для конкретной пары плиток
         let pos1 = template.positions[changedIndex1]
         let pos2 = template.positions[changedIndex2]
         
+        // Определяем направление изменения
+        let isHorizontal = pos1.1 == pos2.1 // Одинаковая строка = горизонтальные соседи
+        
         if isHorizontal {
-            // Изменяем ширину колонок
+            // Изменяем ширину колонок при сохранении общей ширины
             let totalWidth = columnWidths[pos1.0] + columnWidths[pos2.0]
-            columnWidths[pos1.0] = totalWidth * ratio
-            columnWidths[pos2.0] = totalWidth * (1 - ratio)
-        } else {
-            // Изменяем высоту строк
-            let totalHeight = rowHeights[pos1.1] + rowHeights[pos2.1]
-            rowHeights[pos1.1] = totalHeight * ratio
-            rowHeights[pos2.1] = totalHeight * (1 - ratio)
-        }
-        
-        // ВАЖНО: Поддерживаем квадратную форму сетки
-        // Вычисляем общие размеры сетки
-        let totalGridWidth = columnWidths.reduce(0, +) + innerMargin * CGFloat(columnWidths.count - 1)
-        let totalGridHeight = rowHeights.reduce(0, +) + innerMargin * CGFloat(rowHeights.count - 1)
-        
-        // Определяем максимальный размер для квадрата
-        let maxAvailableSize = min(collageView.bounds.width, collageView.bounds.height) - 2 * outerMargin
-        let currentMaxSize = max(totalGridWidth, totalGridHeight)
-        
-        // Если сетка превышает максимальный размер или не квадратная, масштабируем
-        if currentMaxSize > maxAvailableSize {
-            let scale = maxAvailableSize / currentMaxSize
+            let newWidth1 = totalWidth * ratio
+            let newWidth2 = totalWidth * (1 - ratio)
             
-            // Применяем масштабирование ко всем размерам
-            for i in 0..<columnWidths.count {
-                columnWidths[i] *= scale
+            // Проверяем, что новые размеры не слишком малы (минимум 20px)
+            let minSize: CGFloat = 20
+            if newWidth1 >= minSize && newWidth2 >= minSize {
+                columnWidths[pos1.0] = newWidth1
+                columnWidths[pos2.0] = newWidth2
             }
-            for i in 0..<rowHeights.count {
-                rowHeights[i] *= scale
+        } else {
+            // Изменяем высоту строк при сохранении общей высоты
+            let totalHeight = rowHeights[pos1.1] + rowHeights[pos2.1]
+            let newHeight1 = totalHeight * ratio
+            let newHeight2 = totalHeight * (1 - ratio)
+            
+            // Проверяем, что новые размеры не слишком малы (минимум 20px)
+            let minSize: CGFloat = 20
+            if newHeight1 >= minSize && newHeight2 >= minSize {
+                rowHeights[pos1.1] = newHeight1
+                rowHeights[pos2.1] = newHeight2
             }
         }
         
-        // Пересчитываем финальные размеры сетки
-        let finalGridWidth = outerMargin * 2 + columnWidths.reduce(0, +) + innerMargin * CGFloat(columnWidths.count - 1)
-        let finalGridHeight = outerMargin * 2 + rowHeights.reduce(0, +) + innerMargin * CGFloat(rowHeights.count - 1)
+        // КРИТИЧНО: Нормализуем размеры чтобы они точно помещались в доступную область
+        let totalHorizontalSpacing = innerMargin * CGFloat(columns - 1)
+        let totalVerticalSpacing = innerMargin * CGFloat(rows - 1)
+        let maxAllowedWidth = workAreaSize.width - totalHorizontalSpacing
+        let maxAllowedHeight = workAreaSize.height - totalVerticalSpacing
         
-        // Обеспечиваем квадратную форму - используем максимальный размер для обеих сторон
-        let squareSize = max(finalGridWidth, finalGridHeight)
+        let currentTotalWidth = columnWidths.reduce(0, +)
+        let currentTotalHeight = rowHeights.reduce(0, +)
+        
+        // Масштабируем пропорционально если превышаем границы
+        if currentTotalWidth > maxAllowedWidth {
+            let scale = maxAllowedWidth / currentTotalWidth
+            columnWidths = columnWidths.map { $0 * scale }
+        }
+        
+        if currentTotalHeight > maxAllowedHeight {
+            let scale = maxAllowedHeight / currentTotalHeight
+            rowHeights = rowHeights.map { $0 * scale }
+        }
         
         // Сохраняем обновленные размеры
         currentColumnWidths = columnWidths
         currentRowHeights = rowHeights
         
-        // Обновляем размер gridContainer как квадрат
+        // ВАЖНО: Проверяем, что общие размеры не превышают доступную область
+        let actualGridWidth = columnWidths.reduce(0, +) + innerMargin * CGFloat(columns - 1)
+        let actualGridHeight = rowHeights.reduce(0, +) + innerMargin * CGFloat(rows - 1)
+        
+        // Используем фактические размеры вместо workAreaSize
+        let gridWidth = min(actualGridWidth, workAreaSize.width)
+        let gridHeight = min(actualGridHeight, workAreaSize.height)
+        
+        // Обновляем размер gridContainer с проверкой границ и outerMargin
         gridContainer.snp.remakeConstraints { make in
-            make.center.equalToSuperview()
-            make.width.height.equalTo(squareSize)
+            make.centerX.equalToSuperview()
+            make.centerY.equalToSuperview()
+            make.width.equalTo(gridWidth)
+            make.height.equalTo(gridHeight)
+            // ВАЖНО: Убеждаемся что gridContainer не выходит за пределы с учетом outerMargin
+            make.leading.greaterThanOrEqualToSuperview().offset(outerMargin)
+            make.trailing.lessThanOrEqualToSuperview().offset(-outerMargin)
+            make.top.greaterThanOrEqualToSuperview().offset(outerMargin)
+            make.bottom.lessThanOrEqualToSuperview().offset(-outerMargin)
         }
+        
+        print("📐 Размеры контейнера: ширина=\(gridWidth), высота=\(gridHeight)")
+        print("📊 Фактические размеры: ширина=\(actualGridWidth), высота=\(actualGridHeight)")
         
         // Пересоздаем constraints для всех плиток
         for (index, position) in template.positions.enumerated() {
             guard let tileView = gridContainer.viewWithTag(index) else { continue }
             
-            let col = position.0
-            let row = position.1
+            let col = CGFloat(position.0)
+            let row = CGFloat(position.1)
             
-            // Вычисляем позицию плитки с центрированием в квадрате
-            let contentWidth = columnWidths.reduce(0, +) + innerMargin * CGFloat(columnWidths.count - 1)
-            let contentHeight = rowHeights.reduce(0, +) + innerMargin * CGFloat(rowHeights.count - 1)
-            
-            let offsetX = (squareSize - contentWidth) / 2
-            let offsetY = (squareSize - contentHeight) / 2
-            
-            var x: CGFloat = offsetX
-            for i in 0..<col {
+            // Вычисляем позицию плитки
+            var x: CGFloat = 0
+            for i in 0..<position.0 {
                 x += columnWidths[i] + innerMargin
             }
             
-            var y: CGFloat = offsetY
-            for i in 0..<row {
+            var y: CGFloat = 0
+            for i in 0..<position.1 {
                 y += rowHeights[i] + innerMargin
             }
             
-            let width = columnWidths[col]
-            let height = rowHeights[row]
+            // Базовые размеры плитки
+            var tileWidth = columnWidths[position.0]
+            var tileHeight = rowHeights[position.1]
             
-            // Специальная обработка для растянутых плиток
-            var finalWidth = width
-            var finalHeight = height
-            
+            // Специальная обработка для расширенных плиток
             if template.name == "Left Tall, Right Two" && position == (0, 0) {
-                finalHeight = rowHeights[0] + rowHeights[1] + innerMargin
+                tileHeight = rowHeights[0] + rowHeights[1] + innerMargin
             } else if template.name == "Right Tall, Left Two" && position == (1, 0) {
-                finalHeight = rowHeights[0] + rowHeights[1] + innerMargin
+                tileHeight = rowHeights[0] + rowHeights[1] + innerMargin
             } else if template.name == "Top Long, Bottom Two" && position == (0, 0) {
-                finalWidth = columnWidths[0] + columnWidths[1] + innerMargin
+                tileWidth = columnWidths[0] + columnWidths[1] + innerMargin
             } else if template.name == "Bottom Long, Top Two" && position == (0, 1) {
-                finalWidth = columnWidths[0] + columnWidths[1] + innerMargin
+                tileWidth = columnWidths[0] + columnWidths[1] + innerMargin
             }
             
-            // Пересоздаем constraints
+            // Обновляем constraints плитки
             tileView.snp.remakeConstraints { make in
                 make.left.equalToSuperview().offset(x)
                 make.top.equalToSuperview().offset(y)
-                make.width.equalTo(finalWidth)
-                make.height.equalTo(finalHeight)
+                make.width.equalTo(tileWidth)
+                make.height.equalTo(tileHeight)
             }
         }
         
         // Обновляем позиции границ
-        updateBorderPositions(template: template, gridContainer: gridContainer)
+        updateBorderPositionsWithAspectRatio(template: template, gridContainer: gridContainer)
+        
+        print("🔧 Обновлены размеры плиток с соотношением \(currentAspectRatio.displayName), ratio: \(ratio)")
     }
     
-    private func updateBorderPositions(template: CollageTemplate, gridContainer: UIView) {
-        // Обновляем позиции всех границ
+    private func updateBorderPositionsWithAspectRatio(template: CollageTemplate, gridContainer: UIView) {
+        // Обновляем позиции всех границ с учетом новых размеров
         for borderView in borderViews {
             let index1 = borderView.tag / 100
             let index2 = borderView.tag % 100
@@ -1602,6 +1907,7 @@ extension CollageEditorViewController: BorderDragViewDelegate {
             
             let isHorizontalNeighbors = abs(pos1.0 - pos2.0) == 1 && pos1.1 == pos2.1
             
+            // Пересоздаем constraints для границы
             borderView.snp.remakeConstraints { make in
                 if isHorizontalNeighbors {
                     // Вертикальная граница между горизонтальными соседями
@@ -1852,6 +2158,222 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
             }
         }
     }
+    
+    // MARK: - Aspect Ratio Selector Methods
+    
+    private func setupAspectRatioSelector() {
+        aspectRatioScrollView.backgroundColor = .systemBackground
+        aspectRatioScrollView.showsHorizontalScrollIndicator = false
+        aspectRatioScrollView.contentInset = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
+        
+        aspectRatioStackView.axis = .horizontal
+        aspectRatioStackView.spacing = 12
+        aspectRatioStackView.alignment = .center
+        
+        aspectRatioScrollView.addSubview(aspectRatioStackView)
+        
+        aspectRatioStackView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+            make.height.equalToSuperview()
+        }
+        
+        createAspectRatioButtons()
+    }
+    
+    private func createAspectRatioButtons() {
+        aspectRatioButtons.removeAll()
+        aspectRatioStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        
+        for aspectRatio in AspectRatioManager.shared.allRatios {
+            let button = createAspectRatioButton(for: aspectRatio)
+            aspectRatioButtons.append(button)
+            aspectRatioStackView.addArrangedSubview(button)
+        }
+        
+        updateAspectRatioButtonStates()
+    }
+    
+    private func createAspectRatioButton(for aspectRatio: AspectRatio) -> UIButton {
+        let button = UIButton(type: .system)
+        button.backgroundColor = .systemBackground
+        button.layer.cornerRadius = 8
+        button.layer.borderWidth = 1
+        button.layer.borderColor = UIColor.systemGray4.cgColor
+        
+        // Создаем контейнер для кнопки
+        let containerView = UIView()
+        containerView.backgroundColor = .clear
+        containerView.isUserInteractionEnabled = false
+        
+        // Создаем превью соотношения сторон
+        let previewView = UIView()
+        previewView.backgroundColor = .systemGray5
+        previewView.layer.cornerRadius = 4
+        previewView.isUserInteractionEnabled = false
+        
+        // Лейблы
+        let titleLabel = UILabel()
+        titleLabel.text = aspectRatio.name
+        titleLabel.font = UIFont.systemFont(ofSize: 10, weight: .medium)
+        titleLabel.textAlignment = .center
+        titleLabel.textColor = .label
+        titleLabel.isUserInteractionEnabled = false
+        
+        let ratioLabel = UILabel()
+        ratioLabel.text = aspectRatio.displayName
+        ratioLabel.font = UIFont.systemFont(ofSize: 8)
+        ratioLabel.textAlignment = .center
+        ratioLabel.textColor = .secondaryLabel
+        ratioLabel.isUserInteractionEnabled = false
+        
+        // Добавляем элементы
+        button.addSubview(containerView)
+        containerView.addSubview(previewView)
+        containerView.addSubview(titleLabel)
+        containerView.addSubview(ratioLabel)
+        
+        // Constraints
+        containerView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+        
+        // Вычисляем размер превью с учетом соотношения сторон
+        let maxPreviewWidth: CGFloat = 25
+        let maxPreviewHeight: CGFloat = 15
+        let previewSize = aspectRatio.sizeForWidth(maxPreviewWidth)
+        let finalWidth = min(maxPreviewWidth, previewSize.width)
+        let finalHeight = min(maxPreviewHeight, previewSize.height)
+        
+        previewView.snp.makeConstraints { make in
+            make.top.equalToSuperview().offset(6)
+            make.centerX.equalToSuperview()
+            make.width.equalTo(finalWidth)
+            make.height.equalTo(finalHeight)
+        }
+        
+        titleLabel.snp.makeConstraints { make in
+            make.top.equalTo(previewView.snp.bottom).offset(3)
+            make.leading.trailing.equalToSuperview().inset(2)
+        }
+        
+        ratioLabel.snp.makeConstraints { make in
+            make.top.equalTo(titleLabel.snp.bottom).offset(1)
+            make.leading.trailing.equalToSuperview().inset(2)
+            make.bottom.equalToSuperview().offset(-3)
+        }
+        
+        button.snp.makeConstraints { make in
+            make.width.equalTo(60)
+            make.height.equalTo(60)
+        }
+        
+        // Добавляем действие
+        button.addTarget(self, action: #selector(aspectRatioButtonTapped(_:)), for: .touchUpInside)
+        button.tag = AspectRatioManager.shared.allRatios.firstIndex(where: { $0.id == aspectRatio.id }) ?? 0
+        
+        return button
+    }
+    
+    @objc private func aspectRatioButtonTapped(_ sender: UIButton) {
+        let aspectRatio = AspectRatioManager.shared.allRatios[sender.tag]
+        currentAspectRatio = aspectRatio
+        UserDefaults.standard.selectedAspectRatioId = aspectRatio.id
+        
+        updateAspectRatioButtonStates()
+        updateCollageViewAspectRatio()
+        
+        print("📐 Выбрано соотношение сторон: \(aspectRatio.displayName)")
+    }
+    
+    private func updateAspectRatioButtonStates() {
+        for (index, button) in aspectRatioButtons.enumerated() {
+            let aspectRatio = AspectRatioManager.shared.allRatios[index]
+            let isSelected = aspectRatio.id == currentAspectRatio.id
+            
+            if isSelected {
+                button.layer.borderColor = UIColor.systemBlue.cgColor
+                button.layer.borderWidth = 2
+                button.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.1)
+            } else {
+                button.layer.borderColor = UIColor.systemGray4.cgColor
+                button.layer.borderWidth = 1
+                button.backgroundColor = .systemBackground
+            }
+        }
+    }
+    
+    private func updateCollageViewAspectRatio() {
+        guard let template = viewModel.collageTemplate.value else { return }
+        
+        // Проверяем, существует ли уже gridContainer
+        if let gridContainer = collageView.viewWithTag(gridContainerTag) {
+            // Если контейнер уже существует, используем быстрое обновление
+            let currentImages = saveCurrentImages()
+            
+            print("🔄 Быстрое обновление соотношения сторон на: \(currentAspectRatio.displayName)")
+            
+            rebuildCollageLayoutWithAspectRatio(with: template, newInnerMargin: currentInnerMargin)
+            
+            // Восстанавливаем изображения
+            restoreImages(currentImages)
+        } else {
+            // Если контейнера нет, создаем полностью новый
+            print("🔄 Полная инициализация с соотношением: \(currentAspectRatio.displayName)")
+            setupCollageView(with: template)
+        }
+    }
+    
+    // MARK: - Helper methods for smooth transitions
+    
+    private func saveCurrentImages() -> [Int: UIImage] {
+        var savedImages: [Int: UIImage] = [:]
+        
+        if let gridContainer = collageView.viewWithTag(gridContainerTag) {
+            for (index, subview) in gridContainer.subviews.enumerated() {
+                if let tileView = subview as? UIView,
+                   let imageView = tileView.subviews.first(where: { $0 is UIImageView }) as? UIImageView,
+                   let image = imageView.image,
+                   image != UIImage(named: "placeholder") {
+                    savedImages[index] = image
+                }
+            }
+        }
+        
+        return savedImages
+    }
+    
+    private func restoreImages(_ savedImages: [Int: UIImage]) {
+        guard let gridContainer = collageView.viewWithTag(gridContainerTag) else { return }
+        
+        for (index, image) in savedImages {
+            if index < gridContainer.subviews.count,
+               let tileView = gridContainer.subviews[index] as? UIView,
+               let imageView = tileView.subviews.first(where: { $0 is UIImageView }) as? UIImageView {
+                
+                imageView.image = image
+                imageView.contentMode = .scaleAspectFill
+                
+                // Настраиваем жесты для изображения с контентом
+                setupImageGestures(for: imageView, at: index)
+            }
+        }
+         }
+     
+     private func setupImageGestures(for imageView: UIImageView, at index: Int) {
+         // Удаляем все существующие жесты
+         imageView.gestureRecognizers?.removeAll()
+         
+         // Создаем новый обработчик жестов
+         let gestureHandler = AdvancedImageGestureHandler(imageView: imageView, containerView: collageView)
+         gestureHandler.delegate = self
+         gestureHandlers.append(gestureHandler)
+         
+         // Настраиваем интерактивность
+         imageView.isUserInteractionEnabled = true
+         imageView.tag = index
+         
+         print("🎯 Настроены жесты для изображения в позиции \(index)")
+     }
 }
 
 // MARK: - AdvancedImageGestureHandlerDelegate

@@ -38,12 +38,10 @@ class CollageEditorViewModel {
     }
     
     /// Sets up reactive bindings.
-    /// In this case, the save button is enabled when there is at least one selected image.
+    /// Save button is always enabled as we can save collage even with placeholder images.
     private func setupBindings() {
-        selectedImages
-            .map { !$0.isEmpty }
-            .bind(to: saveButtonEnabled)
-            .disposed(by: disposeBag)
+        // Кнопка сохранения всегда доступна - можно сохранять коллаж даже с placeholder изображениями
+        saveButtonEnabled.accept(true)
     }
     
     /// Sets an image at the specified index path.

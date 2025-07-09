@@ -21,19 +21,22 @@ struct SavedCollage {
     let image: UIImage
     let createdDate: Date
     let templateName: String
+    let aspectRatioId: String
     
-    init(image: UIImage, templateName: String) {
+    init(image: UIImage, templateName: String, aspectRatioId: String = "square") {
         self.id = UUID().uuidString
         self.image = image
         self.createdDate = Date()
         self.templateName = templateName
+        self.aspectRatioId = aspectRatioId
     }
     
-    init(id: String, image: UIImage, createdDate: Date, templateName: String) {
+    init(id: String, image: UIImage, createdDate: Date, templateName: String, aspectRatioId: String = "square") {
         self.id = id
         self.image = image
         self.createdDate = createdDate
         self.templateName = templateName
+        self.aspectRatioId = aspectRatioId
     }
 }
 
@@ -61,7 +64,8 @@ class SavedCollagesManager {
             [
                 "id": collage.id,
                 "createdDate": collage.createdDate.timeIntervalSince1970,
-                "templateName": collage.templateName
+                "templateName": collage.templateName,
+                "aspectRatioId": collage.aspectRatioId
             ]
         }
         userDefaults.set(collageData, forKey: collagesKey)
@@ -79,6 +83,8 @@ class SavedCollagesManager {
                 return nil
             }
             
+            let aspectRatioId = data["aspectRatioId"] as? String ?? "square"
+            
             // Загружаем изображение из Documents
             let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let imagePath = documentsPath.appendingPathComponent("\(id).jpg")
@@ -92,7 +98,8 @@ class SavedCollagesManager {
                 id: id,
                 image: image,
                 createdDate: Date(timeIntervalSince1970: timestamp),
-                templateName: templateName
+                templateName: templateName,
+                aspectRatioId: aspectRatioId
             )
         }.sorted { $0.createdDate > $1.createdDate } // Сортируем по дате создания (новые сначала)
     }

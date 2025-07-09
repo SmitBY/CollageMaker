@@ -16,9 +16,10 @@ class GalleryCollectionViewCell: UICollectionViewCell {
     
     private let imageView: UIImageView = {
         let imageView = UIImageView()
-        imageView.contentMode = .scaleAspectFill
+        imageView.contentMode = .scaleAspectFit
         imageView.clipsToBounds = true
         imageView.layer.cornerRadius = 8
+        imageView.backgroundColor = .systemGray6
         return imageView
     }()
     
@@ -262,6 +263,10 @@ class GalleryViewController: UIViewController {
         
         let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
         
+        alert.addAction(UIAlertAction(title: "Просмотр", style: .default) { [weak self] _ in
+            self?.viewCollageFullscreen(collage)
+        })
+        
         alert.addAction(UIAlertAction(title: "Редактировать", style: .default) { [weak self] _ in
             self?.editCollage(collage)
         })
@@ -294,6 +299,11 @@ class GalleryViewController: UIViewController {
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+    
+    private func viewCollageFullscreen(_ collage: SavedCollage) {
+        let fullscreenVC = FullscreenCollageViewController(collage: collage)
+        present(fullscreenVC, animated: true)
     }
     
     private func shareCollage(_ collage: SavedCollage) {
@@ -342,7 +352,21 @@ extension GalleryViewController: UICollectionViewDelegateFlowLayout {
         let spacing: CGFloat = 10
         let availableWidth = collectionView.frame.width - (padding * 2) - spacing
         let itemWidth = availableWidth / 2
-        return CGSize(width: itemWidth, height: itemWidth)
+        
+        // Получаем коллаж для определения его соотношения сторон
+        let collage = viewModel.savedCollages.value[indexPath.item]
+        
+        // Получаем соотношение сторон из AspectRatioManager
+        if let aspectRatio = AspectRatioManager.shared.ratio(by: collage.aspectRatioId) {
+            let itemHeight = itemWidth / aspectRatio.ratio
+            return CGSize(width: itemWidth, height: itemHeight)
+        } else {
+            // Если не найдено соотношение, используем соотношение самого изображения
+            let imageSize = collage.image.size
+            let aspectRatio = imageSize.width / imageSize.height
+            let itemHeight = itemWidth / aspectRatio
+            return CGSize(width: itemWidth, height: itemHeight)
+        }
     }
 }
 
