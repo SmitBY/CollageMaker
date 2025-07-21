@@ -318,4 +318,4 @@ extension StickerView: UIGestureRecognizerDelegate {
         return (gestureRecognizer == pinchGesture && otherGestureRecognizer == rotationGesture) ||
                (gestureRecognizer == rotationGesture && otherGestureRecognizer == pinchGesture)
     }
-} 
+}

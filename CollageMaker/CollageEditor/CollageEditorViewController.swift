@@ -1,4 +1,4 @@
-//
+ //
 //  CollageEditorViewController.swift
 //  CollageMaker
 //
@@ -10,6 +10,7 @@ import SnapKit
 import RxSwift
 import RxCocoa
 import Photos
+import PhotosUI
 
 // MARK: - Aspect Ratio Model
 struct AspectRatio {
@@ -142,6 +143,7 @@ class CollageEditorViewController: UIViewController {
     private let addTextButton = UIButton(type: .system)
     private let addStickerButton = UIButton(type: .system)
     private let changeBackgroundButton = UIButton(type: .system)
+    private let addImageButton = UIButton(type: .system)
     
     // Aspect Ratio Selector
     private let aspectRatioScrollView = UIScrollView()
@@ -189,6 +191,10 @@ class CollageEditorViewController: UIViewController {
     // Данные для коллажа
     private var selectedPhotos: [UIImage] = [] // Выбранные пользователем фотографии
     private var textLayers: [TextLayerView] = [] // Текстовые слои
+    // Frame picker для добавления изображений
+    private var framePickerView: FramePickerView?
+    private var isAddingNewImageWithFrame = false
+    private var selectedImageForFraming: UIImage?
     private var stickerViews: [StickerView] = [] // Стикеры
     private var borderViews: [BorderDragView] = [] // Границы для изменения размеров
     private var currentTextLayer: TextLayerView?
@@ -290,6 +296,13 @@ class CollageEditorViewController: UIViewController {
         changeBackgroundButton.setTitleColor(.white, for: .normal)
         changeBackgroundButton.layer.cornerRadius = 8
         
+        // Настройка кнопки добавления изображения
+        addImageButton.setTitle("+ 📷", for: .normal)
+        addImageButton.titleLabel?.font = UIFont.systemFont(ofSize: 16)
+        addImageButton.backgroundColor = .systemBlue
+        addImageButton.setTitleColor(.white, for: .normal)
+        addImageButton.layer.cornerRadius = 8
+        
         // Настройка области коллажа
         collageView.backgroundColor = .lightGray
         collageView.layer.cornerRadius = 12
@@ -317,6 +330,7 @@ class CollageEditorViewController: UIViewController {
         view.addSubview(addTextButton)
         view.addSubview(addStickerButton)
         view.addSubview(changeBackgroundButton)
+        view.addSubview(addImageButton)
         
         // Добавляем фоновое изображение в collageView (самое первое, чтобы оно было позади всех элементов)
         collageView.addSubview(backgroundImageView)
@@ -405,6 +419,13 @@ class CollageEditorViewController: UIViewController {
             make.height.equalTo(40)
         }
         
+        addImageButton.snp.makeConstraints { make in
+            make.trailing.equalTo(changeBackgroundButton.snp.leading).offset(-10)
+            make.bottom.equalTo(slidersContainerView.snp.top).offset(-10)
+            make.width.equalTo(70)
+            make.height.equalTo(40)
+        }
+        
         // Убеждаемся, что кнопки всегда поверх других элементов
         ensureButtonsOnTop()
         
@@ -419,6 +440,7 @@ class CollageEditorViewController: UIViewController {
         view.bringSubviewToFront(addTextButton)
         view.bringSubviewToFront(addStickerButton)
         view.bringSubviewToFront(changeBackgroundButton)
+        view.bringSubviewToFront(addImageButton)
         
         // Добавляем тень для лучшей видимости
         saveButton.layer.shadowColor = UIColor.black.cgColor
@@ -440,6 +462,12 @@ class CollageEditorViewController: UIViewController {
         changeBackgroundButton.layer.shadowOffset = CGSize(width: 0, height: 2)
         changeBackgroundButton.layer.shadowOpacity = 0.3
         changeBackgroundButton.layer.shadowRadius = 4
+        
+        addImageButton.rx.tap
+            .subscribe(onNext: { [weak self] in
+                self?.showImagePickerWithFrameSelection()
+            })
+            .disposed(by: disposeBag)
         
         slidersContainerView.layer.shadowColor = UIColor.black.cgColor
         slidersContainerView.layer.shadowOffset = CGSize(width: 0, height: 2)
@@ -2475,6 +2503,166 @@ extension CollageEditorViewController: AdvancedImageGestureHandlerDelegate {
             imageView.isUserInteractionEnabled = true
             
             print("Изображение удалено из позиции \(index)")
+        }
+    }
+    
+    // MARK: - Image Addition with Frame Selection
+
+    /// Показывает выбор изображения с последующим выбором формы рамки
+    private func showImagePickerWithFrameSelection() {
+        var configuration = PHPickerConfiguration()
+        configuration.filter = .images
+        configuration.selectionLimit = 1
+        
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = self
+        
+        isAddingNewImageWithFrame = true
+        present(picker, animated: true)
+    }
+
+    /// Показывает выбор формы рамки для выбранного изображения
+    private func showFrameSelectionForImage(_ image: UIImage) {
+        selectedImageForFraming = image
+        
+        if framePickerView == nil {
+            setupFramePickerForNewImage()
+        } else {
+            // При повторном показе тоже настраиваем callbacks (на случай если они были сброшены)
+            framePickerView?.onShow = { [weak self] in
+                self?.hideSaveButtonForFramePicker()
+            }
+            
+            framePickerView?.onHide = { [weak self] in
+                self?.showSaveButtonAfterFramePicker()
+            }
+            
+            framePickerView?.show(animated: true)
+        }
+    }
+
+    /// Настраивает FramePickerView для добавления нового изображения
+    private func setupFramePickerForNewImage() {
+        framePickerView = FramePickerView()
+        framePickerView?.delegate = self
+        
+        // Настраиваем callbacks для управления кнопкой сохранения
+        framePickerView?.onShow = { [weak self] in
+            self?.hideSaveButtonForFramePicker()
+        }
+        
+        framePickerView?.onHide = { [weak self] in
+            self?.showSaveButtonAfterFramePicker()
+        }
+        
+        if let framePickerView = framePickerView {
+            view.addSubview(framePickerView)
+            framePickerView.snp.makeConstraints { make in
+                make.leading.trailing.bottom.equalToSuperview()
+                make.height.equalTo(120)
+            }
+            view.bringSubviewToFront(framePickerView)
+            framePickerView.show(animated: true)
+        }
+    }
+
+    /// Создает изображение с применённой формой рамки и добавляет его в коллаж
+    private func addImageWithFrame(_ image: UIImage, frameShape: FrameShape) {
+        let framedImage = createImageWithFrame(image: image, frameShape: frameShape)
+        
+        let stickerView = StickerView(image: framedImage)
+        let centerX = collageView.bounds.midX
+        let centerY = collageView.bounds.midY
+        stickerView.center = CGPoint(x: centerX, y: centerY)
+        
+        collageView.addSubview(stickerView)
+        stickerViews.append(stickerView)
+        
+        stickerView.onTap = { [weak self] in
+            self?.selectStickerView(stickerView)
+        }
+        stickerView.onDelete = { [weak self] in
+            self?.removeStickerView(stickerView)
+        }
+        
+        framePickerView?.hide(animated: true)
+        selectedImageForFraming = nil
+        isAddingNewImageWithFrame = false
+        ensureButtonsOnTop()
+    }
+
+    /// Создает изображение с применённой маской формы
+    private func createImageWithFrame(image: UIImage, frameShape: FrameShape) -> UIImage {
+        guard frameShape != .none else { return image }
+        
+        let size = image.size
+        UIGraphicsBeginImageContextWithOptions(size, false, image.scale)
+        defer { UIGraphicsEndImageContext() }
+        
+        guard let context = UIGraphicsGetCurrentContext() else { return image }
+        let bounds = CGRect(origin: .zero, size: size)
+        guard let maskPath = frameShape.createPath(in: bounds) else { return image }
+        
+        context.addPath(maskPath.cgPath)
+        context.clip()
+        image.draw(in: bounds)
+        
+        guard let maskedImage = UIGraphicsGetImageFromCurrentImageContext() else { return image }
+        return maskedImage
+    }
+    
+    // MARK: - Save Button Management
+    
+    /// Скрывает кнопку сохранения при показе FramePickerView
+    private func hideSaveButtonForFramePicker() {
+        saveButton.isHidden = true
+    }
+    
+    /// Показывает кнопку сохранения после скрытия FramePickerView
+    private func showSaveButtonAfterFramePicker() {
+        saveButton.isHidden = false
+    }
+}
+
+// MARK: - PHPickerViewControllerDelegate
+extension CollageEditorViewController: PHPickerViewControllerDelegate {
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true) { [weak self] in
+            guard let self = self else { return }
+            
+            // Если не добавляем новое изображение с рамкой, ничего не делаем
+            guard self.isAddingNewImageWithFrame else { return }
+            
+            // Если нет результатов (отменили выбор), показываем кнопку сохранения обратно
+            guard let result = results.first else {
+                self.showSaveButtonAfterFramePicker()
+                self.isAddingNewImageWithFrame = false
+                return
+            }
+            
+            result.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] (object, error) in
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    
+                    // Если не удалось загрузить изображение, показываем кнопку сохранения обратно
+                    guard let image = object as? UIImage else {
+                        self.showSaveButtonAfterFramePicker()
+                        self.isAddingNewImageWithFrame = false
+                        return
+                    }
+                    
+                    self.showFrameSelectionForImage(image)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - FramePickerViewDelegate
+extension CollageEditorViewController: FramePickerViewDelegate {
+    func framePickerView(_ pickerView: FramePickerView, didSelectFrameShape frameShape: FrameShape) {
+        if isAddingNewImageWithFrame, let image = selectedImageForFraming {
+            addImageWithFrame(image, frameShape: frameShape)
         }
     }
 }

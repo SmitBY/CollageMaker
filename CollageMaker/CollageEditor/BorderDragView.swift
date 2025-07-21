@@ -147,7 +147,7 @@ class BorderDragView: UIView {
                 delta = currentPoint.x - initialTouchPoint.x
                 
                 // Используем размер родительского контейнера для расчета
-                guard let superviewBounds = superview?.bounds else { return }
+                guard superview != nil else { return }
                 let sensitivity: CGFloat = 0.003 // Снижаем чувствительность для плавности
                 let normalizedDelta = delta * sensitivity
                 
@@ -156,7 +156,7 @@ class BorderDragView: UIView {
                 // Горизонтальная граница - изменяем по Y
                 delta = currentPoint.y - initialTouchPoint.y
                 
-                guard let superviewBounds = superview?.bounds else { return }
+                guard superview != nil else { return }
                 let sensitivity: CGFloat = 0.003
                 let normalizedDelta = delta * sensitivity
                 

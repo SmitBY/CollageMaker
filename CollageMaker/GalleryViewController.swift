@@ -307,14 +307,17 @@ class GalleryViewController: UIViewController {
     }
     
     private func shareCollage(_ collage: SavedCollage) {
-        let activityVC = UIActivityViewController(activityItems: [collage.image], applicationActivities: nil)
+        print("🔗 Gallery: Начинаем sharing коллажа \(collage.templateName)")
         
-        if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = view
-            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+        SharingManager.shared.shareCollage(
+            collage.image,
+            templateName: collage.templateName,
+            sourceView: view,
+            sourceRect: CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0),
+            from: self
+        ) {
+            print("✅ Sharing completed from Gallery")
         }
-        
-        present(activityVC, animated: true)
     }
 }
 

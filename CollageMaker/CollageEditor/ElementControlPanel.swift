@@ -5,6 +5,8 @@ protocol ElementControlPanelDelegate: AnyObject {
     func controlPanel(_ panel: ElementControlPanel, didChangeScale scale: CGFloat)
     func controlPanel(_ panel: ElementControlPanel, didChangeRotation rotation: CGFloat)
     func controlPanel(_ panel: ElementControlPanel, didResetTransform: Void)
+    func controlPanel(_ panel: ElementControlPanel, didRequestFramePicker: Void)
+    func controlPanel(_ panel: ElementControlPanel, didSelectFrameShape frameShape: FrameShape)
 }
 
 class ElementControlPanel: UIView {
@@ -15,6 +17,7 @@ class ElementControlPanel: UIView {
     private let rotationButton = UIButton(type: .custom)
     private let scaleButton = UIButton(type: .custom)
     private let resetButton = UIButton(type: .custom)
+    private let frameButton = UIButton(type: .custom)
     
     // Gesture tracking
     private var initialRotationAngle: CGFloat = 0
@@ -72,12 +75,24 @@ class ElementControlPanel: UIView {
         resetButton.layer.shadowOpacity = 0.3
         resetButton.layer.shadowRadius = 4
         
+        // Кнопка фреймов (верхний левый угол)
+        frameButton.backgroundColor = UIColor.systemPurple.withAlphaComponent(0.8)
+        frameButton.setImage(UIImage(systemName: "heart"), for: .normal)
+        frameButton.tintColor = .white
+        frameButton.layer.cornerRadius = 20
+        frameButton.layer.shadowColor = UIColor.black.cgColor
+        frameButton.layer.shadowOffset = CGSize(width: 0, height: 2)
+        frameButton.layer.shadowOpacity = 0.3
+        frameButton.layer.shadowRadius = 4
+        
         addSubview(rotationButton)
         addSubview(scaleButton)
         addSubview(resetButton)
+        addSubview(frameButton)
         
         // Действия кнопок
         resetButton.addTarget(self, action: #selector(resetButtonTapped), for: .touchUpInside)
+        frameButton.addTarget(self, action: #selector(frameButtonTapped), for: .touchUpInside)
     }
     
     private func setupConstraints() {
@@ -96,6 +111,12 @@ class ElementControlPanel: UIView {
         // Кнопка сброса - верх по центру
         resetButton.snp.makeConstraints { make in
             make.top.centerX.equalToSuperview().inset(10)
+            make.width.height.equalTo(40)
+        }
+        
+        // Кнопка фреймов - верхний левый угол
+        frameButton.snp.makeConstraints { make in
+            make.top.leading.equalToSuperview().inset(10)
             make.width.height.equalTo(40)
         }
     }
@@ -126,6 +147,23 @@ class ElementControlPanel: UIView {
         }) { _ in
             UIView.animate(withDuration: 0.1) {
                 self.resetButton.transform = .identity
+            }
+        }
+    }
+    
+    @objc private func frameButtonTapped() {
+        delegate?.controlPanel(self, didRequestFramePicker: ())
+        
+        // Haptic feedback
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+        
+        // Анимация кнопки
+        UIView.animate(withDuration: 0.1, animations: {
+            self.frameButton.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+        }) { _ in
+            UIView.animate(withDuration: 0.1) {
+                self.frameButton.transform = .identity
             }
         }
     }
@@ -260,5 +298,27 @@ class ElementControlPanel: UIView {
     func resetValues() {
         currentRotation = 0
         currentScale = 1.0
+    }
+    
+    // MARK: - Frame Shape Methods
+    
+    /// Обновляет внешний вид кнопки фрейма в соответствии с выбранной формой
+    /// - Parameter frameShape: Текущая форма рамки
+    func updateFrameButton(for frameShape: FrameShape) {
+        let iconName = frameShape == .none ? "rectangle.dashed" : frameShape.iconName
+        frameButton.setImage(UIImage(systemName: iconName), for: .normal)
+        
+        // Меняем цвет кнопки в зависимости от состояния
+        if frameShape == .none {
+            frameButton.backgroundColor = UIColor.systemGray.withAlphaComponent(0.8)
+        } else {
+            frameButton.backgroundColor = UIColor.systemPurple.withAlphaComponent(0.8)
+        }
+    }
+    
+    /// Уведомляет delegate о выборе формы рамки
+    /// - Parameter frameShape: Выбранная форма рамки
+    func notifyFrameShapeSelected(_ frameShape: FrameShape) {
+        delegate?.controlPanel(self, didSelectFrameShape: frameShape)
     }
 } 

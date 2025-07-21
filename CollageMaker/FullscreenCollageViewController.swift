@@ -195,14 +195,17 @@ class FullscreenCollageViewController: UIViewController {
     }
     
     @objc private func shareButtonTapped() {
-        let activityVC = UIActivityViewController(activityItems: [collage.image], applicationActivities: nil)
+        print("🔗 FullscreenCollage: Начинаем sharing коллажа")
         
-        if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = shareButton
-            popover.sourceRect = shareButton.bounds
+        SharingManager.shared.shareCollage(
+            collage.image,
+            templateName: collage.templateName,
+            sourceView: shareButton,
+            sourceRect: shareButton.bounds,
+            from: self
+        ) {
+            print("✅ Sharing completed from FullscreenCollage")
         }
-        
-        present(activityVC, animated: true)
     }
     
     @objc private func handlePanGesture(_ gesture: UIPanGestureRecognizer) {

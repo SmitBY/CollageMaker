@@ -242,6 +242,11 @@ class AdvancedImageGestureHandler: NSObject {
     
     // MARK: - Public Methods
     
+    /// Получает текущую трансформацию изображения
+    func getCurrentTransform() -> CGAffineTransform {
+        return imageView?.transform ?? .identity
+    }
+    
     /// Сбрасывает трансформацию изображения если оно вышло за границы
     func resetTransformIfNeeded() {
         guard let imageView = imageView, let containerView = containerView else { return }
@@ -282,3 +287,88 @@ extension AdvancedImageGestureHandler: UIGestureRecognizerDelegate {
         return false
     }
 } 
+// MARK: - Frame Shape Support
+extension AdvancedImageGestureHandler {
+    
+    // MARK: - Frame Shape Properties
+    private static var frameShapeKey: Void?
+    private static var maskLayerKey: Void?
+    
+    var frameShape: FrameShape {
+        get {
+            return objc_getAssociatedObject(self, &Self.frameShapeKey) as? FrameShape ?? .none
+        }
+        set {
+            objc_setAssociatedObject(self, &Self.frameShapeKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            updateFrameMask()
+        }
+    }
+    
+    private var maskLayer: CAShapeLayer? {
+        get {
+            return objc_getAssociatedObject(self, &Self.maskLayerKey) as? CAShapeLayer
+        }
+        set {
+            objc_setAssociatedObject(self, &Self.maskLayerKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        }
+    }
+    
+    // MARK: - Frame Shape Methods
+    
+    /// Устанавливает форму рамки для изображения
+    /// - Parameter shape: Новая форма рамки
+    func setFrameShape(_ shape: FrameShape) {
+        frameShape = shape
+        
+        // Уведомляем delegate если это FrameableDelegate
+        if let frameDelegate = delegate as? FrameableImageGestureHandlerDelegate,
+           let imageView = imageView {
+            frameDelegate.gestureHandler(self, didChangeFrameShape: shape, for: imageView)
+        }
+    }
+    
+    /// Возвращает текущую форму рамки
+    /// - Returns: Текущая форма рамки
+    func getCurrentFrameShape() -> FrameShape {
+        return frameShape
+    }
+    
+    /// Обновляет маску изображения в соответствии с выбранной формой
+    private func updateFrameMask() {
+        guard let imageView = imageView else { return }
+        
+        // Удаляем старую маску
+        maskLayer?.removeFromSuperlayer()
+        maskLayer = nil
+        imageView.layer.mask = nil
+        
+        // Если форма .none, маска не нужна
+        guard frameShape != .none else { return }
+        
+        // Создаем новую маску
+        let newMaskLayer = CAShapeLayer()
+        
+        // Создаем путь для формы
+        if let path = frameShape.createPath(in: imageView.bounds) {
+            newMaskLayer.path = path.cgPath
+            newMaskLayer.fillRule = .evenOdd
+            
+            // Применяем маску к imageView
+            imageView.layer.mask = newMaskLayer
+            maskLayer = newMaskLayer
+            
+            print("✅ Applied frame shape \(frameShape.displayName) to image")
+        }
+    }
+    
+    /// Принудительно обновляет маску (полезно после изменения размеров)
+    func refreshFrameMask() {
+        updateFrameMask()
+    }
+}
+
+// MARK: - Extended Delegate Protocol
+protocol FrameableImageGestureHandlerDelegate: AdvancedImageGestureHandlerDelegate {
+    func gestureHandler(_ handler: AdvancedImageGestureHandler, didChangeFrameShape frameShape: FrameShape, for imageView: UIImageView)
+    func gestureHandler(_ handler: AdvancedImageGestureHandler, didRequestFramePicker imageView: UIImageView)
+}
