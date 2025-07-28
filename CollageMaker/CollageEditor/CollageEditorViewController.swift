@@ -1,4 +1,4 @@
- //
+//
 //  CollageEditorViewController.swift
 //  CollageMaker
 //
@@ -502,7 +502,7 @@ class CollageEditorViewController: UIViewController {
         // Проходим по всем плиткам в шаблоне
         for index in 0..<gridContainer.subviews.count {
             guard let tileView = gridContainer.subviews[safe: index],
-                  let imageView = tileView.subviews.first as? UIImageView else { continue }
+                  let imageView = tileView.subviews.first(where: { $0 is UIImageView }) as? UIImageView else { continue }
             
             // Определяем, какое изображение использовать
             var imageToUse: UIImage?
@@ -789,13 +789,13 @@ class CollageEditorViewController: UIViewController {
         
         // Для каждого элемента шаблона создаем tileView с прямоугольными размерами
         for (index, position) in template.positions.enumerated() {
-            let col = CGFloat(position.0)
-            let row = CGFloat(position.1)
+            _ = position.0
+            _ = position.1
             
             // Расчет позиции и размера плитки с учетом реального соотношения сторон
             var tileFrame = CGRect(
-                x: col * (tileWidth + innerMargin),
-                y: row * (tileHeight + innerMargin),
+                x: CGFloat(position.0) * (tileWidth + innerMargin),
+                y: CGFloat(position.1) * (tileHeight + innerMargin),
                 width: tileWidth,
                 height: tileHeight
             )
@@ -1211,7 +1211,7 @@ class CollageEditorViewController: UIViewController {
         for (index, _) in template.positions.enumerated() {
             // Получаем текущую плитку из UI
             guard let tileView = gridContainer.subviews[safe: index],
-                  let imageView = tileView.subviews.first as? UIImageView
+                  let imageView = tileView.subviews.first(where: { $0 is UIImageView }) as? UIImageView
             else {
                 print("Failed to retrieve tile view or image view for index \(index)")
                 continue
@@ -1523,23 +1523,23 @@ class CollageEditorViewController: UIViewController {
         for (index, position) in template.positions.enumerated() {
             guard let tileView = gridContainer.subviews[safe: index] else { continue }
             
-            let col = position.0
-            let row = position.1
+            _ = position.0
+            _ = position.1
             
             // Вычисляем позицию плитки с учетом переменных размеров колонок и строк
             var x: CGFloat = 0
-            for i in 0..<col {
+            for i in 0..<position.0 {
                 x += columnWidths[i] + newInnerMargin
             }
             
             var y: CGFloat = 0
-            for i in 0..<row {
+            for i in 0..<position.1 {
                 y += rowHeights[i] + newInnerMargin
             }
             
             // Базовые размеры плитки
-            var tileWidth = columnWidths[col]
-            var tileHeight = rowHeights[row]
+            let tileWidth = columnWidths[position.0]
+            let tileHeight = rowHeights[position.1]
             
             // Расчет позиции и размера плитки с учетом переменных размеров
             var tileFrame = CGRect(
@@ -1877,8 +1877,8 @@ extension CollageEditorViewController: BorderDragViewDelegate {
         for (index, position) in template.positions.enumerated() {
             guard let tileView = gridContainer.viewWithTag(index) else { continue }
             
-            let col = CGFloat(position.0)
-            let row = CGFloat(position.1)
+            _ = position.0
+            _ = position.1
             
             // Вычисляем позицию плитки
             var x: CGFloat = 0
@@ -2113,7 +2113,7 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
         guard let gridContainer = collageView.viewWithTag(gridContainerTag),
               index < gridContainer.subviews.count,
               let tileView = gridContainer.subviews[safe: index],
-              let imageView = tileView.subviews.first as? UIImageView else { return }
+              let imageView = tileView.subviews.first(where: { $0 is UIImageView }) as? UIImageView else { return }
         
         // Обновляем изображение в UI
         imageView.image = image
@@ -2334,7 +2334,7 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
         guard let template = viewModel.collageTemplate.value else { return }
         
         // Проверяем, существует ли уже gridContainer
-        if let gridContainer = collageView.viewWithTag(gridContainerTag) {
+        if collageView.viewWithTag(gridContainerTag) != nil {
             // Если контейнер уже существует, используем быстрое обновление
             let currentImages = saveCurrentImages()
             
@@ -2358,8 +2358,7 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
         
         if let gridContainer = collageView.viewWithTag(gridContainerTag) {
             for (index, subview) in gridContainer.subviews.enumerated() {
-                if let tileView = subview as? UIView,
-                   let imageView = tileView.subviews.first(where: { $0 is UIImageView }) as? UIImageView,
+                if let imageView = subview.subviews.first(where: { $0 is UIImageView }) as? UIImageView,
                    let image = imageView.image,
                    image != UIImage(named: "placeholder") {
                     savedImages[index] = image
@@ -2375,8 +2374,7 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
         
         for (index, image) in savedImages {
             if index < gridContainer.subviews.count,
-               let tileView = gridContainer.subviews[index] as? UIView,
-               let imageView = tileView.subviews.first(where: { $0 is UIImageView }) as? UIImageView {
+               let imageView = gridContainer.subviews[index].subviews.first(where: { $0 is UIImageView }) as? UIImageView {
                 
                 imageView.image = image
                 imageView.contentMode = .scaleAspectFill
