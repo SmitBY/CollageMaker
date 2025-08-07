@@ -28,19 +28,93 @@ class OnboardingViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .white
+        view.backgroundColor = .systemBackground
+        setupUI()
+        setupBindings()
+    }
+    
+    private func setupUI() {
+        // Градиентный фон
+        let gradientLayer = CAGradientLayer()
+        gradientLayer.colors = [UIColor.systemBlue.cgColor, UIColor.systemPurple.cgColor]
+        gradientLayer.startPoint = CGPoint(x: 0, y: 0)
+        gradientLayer.endPoint = CGPoint(x: 1, y: 1)
+        gradientLayer.frame = view.bounds
+        view.layer.insertSublayer(gradientLayer, at: 0)
         
-        let label = UILabel()
-        label.text = "Onboarding Screen"
-        label.textAlignment = .center
-        label.font = UIFont.boldSystemFont(ofSize: 24)
-        view.addSubview(label)
+        // Контейнер для контента
+        let contentView = UIView()
+        contentView.backgroundColor = .systemBackground
+        contentView.layer.cornerRadius = 20
+        contentView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        view.addSubview(contentView)
         
-        label.snp.makeConstraints { make in
-            make.center.equalToSuperview()
+        // Логотип/иконка приложения
+        let logoImageView = UIImageView()
+        logoImageView.image = UIImage(systemName: "photo.on.rectangle.angled")
+        logoImageView.tintColor = .systemBlue
+        logoImageView.contentMode = .scaleAspectFit
+        contentView.addSubview(logoImageView)
+        
+        // Заголовок
+        let titleLabel = UILabel()
+        titleLabel.text = "Добро пожаловать в CollageMaker"
+        titleLabel.font = UIFont.boldSystemFont(ofSize: 28)
+        titleLabel.textAlignment = .center
+        titleLabel.numberOfLines = 0
+        titleLabel.textColor = .label
+        contentView.addSubview(titleLabel)
+        
+        // Описание
+        let descriptionLabel = UILabel()
+        descriptionLabel.text = "Создавайте потрясающие коллажи из ваших фотографий с помощью готовых шаблонов и инструментов редактирования"
+        descriptionLabel.font = UIFont.systemFont(ofSize: 17)
+        descriptionLabel.textAlignment = .center
+        descriptionLabel.numberOfLines = 0
+        descriptionLabel.textColor = .systemGray
+        contentView.addSubview(descriptionLabel)
+        
+        // Кнопка "Начать"
+        let startButton = UIButton(type: .system)
+        startButton.setTitle("Начать создание коллажей", for: .normal)
+        startButton.titleLabel?.font = UIFont.boldSystemFont(ofSize: 18)
+        startButton.setTitleColor(.white, for: .normal)
+        startButton.backgroundColor = .systemBlue
+        startButton.layer.cornerRadius = 25
+        contentView.addSubview(startButton)
+        
+        // Constraints
+        contentView.snp.makeConstraints { make in
+            make.leading.trailing.bottom.equalToSuperview()
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(100)
         }
         
-        setupBindings()
+        logoImageView.snp.makeConstraints { make in
+            make.top.equalToSuperview().offset(40)
+            make.centerX.equalToSuperview()
+            make.size.equalTo(80)
+        }
+        
+        titleLabel.snp.makeConstraints { make in
+            make.top.equalTo(logoImageView.snp.bottom).offset(30)
+            make.leading.trailing.equalToSuperview().inset(30)
+        }
+        
+        descriptionLabel.snp.makeConstraints { make in
+            make.top.equalTo(titleLabel.snp.bottom).offset(20)
+            make.leading.trailing.equalToSuperview().inset(30)
+        }
+        
+        startButton.snp.makeConstraints { make in
+            make.top.equalTo(descriptionLabel.snp.bottom).offset(40)
+            make.leading.trailing.equalToSuperview().inset(30)
+            make.height.equalTo(50)
+        }
+        
+        // Обновляем размер градиента при изменении размеров view
+        DispatchQueue.main.async {
+            gradientLayer.frame = self.view.bounds
+        }
     }
     
     private func setupBindings() {

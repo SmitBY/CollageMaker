@@ -270,6 +270,13 @@ class HomeViewController: UIViewController {
         // Получаем координатор и открываем редактор коллажа
         var currentParent = self.parent
         while currentParent != nil {
+            // Ищем MainTabBarController и его координатор
+            if let mainTabBarController = currentParent as? MainTabBarController,
+               let coordinator = mainTabBarController.coordinator {
+                coordinator.showCollageEditor(with: template, selectedPhotos: photosForEditor)
+                return
+            }
+            // Fallback: ищем старый HomeTabBarController для совместимости
             if let tabBarController = currentParent as? HomeTabBarController,
                let coordinator = tabBarController.coordinator {
                 coordinator.showCollageEditor(with: template, selectedPhotos: photosForEditor)

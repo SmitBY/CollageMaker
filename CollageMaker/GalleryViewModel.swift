@@ -23,12 +23,14 @@ class GalleryViewModel {
     }
     
     func loadSavedCollages() {
+        print("🔄 [GalleryViewModel] Начинаем загрузку коллажей...")
         isLoading.accept(true)
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let collages = SavedCollagesManager.shared.getAllCollages()
             
             DispatchQueue.main.async {
+                print("🔄 [GalleryViewModel] Загружено \(collages.count) коллажей, обновляем UI")
                 self?.savedCollages.accept(collages)
                 self?.isLoading.accept(false)
             }

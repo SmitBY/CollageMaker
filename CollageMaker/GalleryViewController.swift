@@ -171,6 +171,40 @@ class GalleryViewController: UIViewController {
     private func setupUI() {
         view.backgroundColor = .systemBackground
         
+        // Добавляем заголовок экрана
+        let headerView = UIView()
+        headerView.backgroundColor = .systemGray6
+        headerView.layer.cornerRadius = 12
+        view.addSubview(headerView)
+        
+        let titleLabel = UILabel()
+        titleLabel.text = "Галерея коллажей"
+        titleLabel.font = UIFont.boldSystemFont(ofSize: 24)
+        titleLabel.textColor = .label
+        headerView.addSubview(titleLabel)
+        
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "Ваши сохраненные работы"
+        subtitleLabel.font = UIFont.systemFont(ofSize: 16)
+        subtitleLabel.textColor = .systemGray
+        headerView.addSubview(subtitleLabel)
+        
+        headerView.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(20)
+            make.leading.trailing.equalToSuperview().inset(20)
+            make.height.equalTo(80)
+        }
+        
+        titleLabel.snp.makeConstraints { make in
+            make.top.equalToSuperview().offset(16)
+            make.leading.trailing.equalToSuperview().inset(16)
+        }
+        
+        subtitleLabel.snp.makeConstraints { make in
+            make.top.equalTo(titleLabel.snp.bottom).offset(4)
+            make.leading.trailing.equalToSuperview().inset(16)
+        }
+        
         view.addSubview(collectionView)
         view.addSubview(emptyStateView)
         view.addSubview(activityIndicator)
@@ -180,11 +214,12 @@ class GalleryViewController: UIViewController {
         emptyStateView.addSubview(emptySubLabel)
         
         collectionView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            make.top.equalTo(headerView.snp.bottom).offset(20)
+            make.leading.trailing.bottom.equalToSuperview()
         }
         
         emptyStateView.snp.makeConstraints { make in
-            make.center.equalToSuperview()
+            make.center.equalTo(collectionView)
             make.leading.trailing.equalToSuperview().inset(40)
         }
         
@@ -204,7 +239,7 @@ class GalleryViewController: UIViewController {
         }
         
         activityIndicator.snp.makeConstraints { make in
-            make.center.equalToSuperview()
+            make.center.equalTo(collectionView)
         }
     }
     

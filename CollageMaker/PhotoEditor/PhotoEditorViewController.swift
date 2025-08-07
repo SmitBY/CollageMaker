@@ -201,21 +201,21 @@ class PhotoEditorViewController: UIViewController {
     
     private let cancelButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("Cancel", for: .normal)
+        button.setTitle("Отмена", for: .normal)
         button.titleLabel?.font = UIFont.boldSystemFont(ofSize: 16)
         button.setTitleColor(.white, for: .normal)
         button.backgroundColor = .systemGray
-        button.layer.cornerRadius = 4
+        button.layer.cornerRadius = 22
         return button
     }()
     
     private let saveButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("Save", for: .normal)
+        button.setTitle("Сохранить", for: .normal)
         button.titleLabel?.font = UIFont.boldSystemFont(ofSize: 16)
         button.setTitleColor(.white, for: .normal)
         button.backgroundColor = .systemBlue
-        button.layer.cornerRadius = 4
+        button.layer.cornerRadius = 22
         return button
     }()
     
@@ -257,7 +257,41 @@ class PhotoEditorViewController: UIViewController {
     
     // MARK: - UI Setup
     private func setupUI() {
-        view.backgroundColor = .black
+        view.backgroundColor = .systemBackground
+        
+        // Добавляем верхний контейнер с заголовком
+        let headerView = UIView()
+        headerView.backgroundColor = .systemGray6
+        headerView.layer.cornerRadius = 12
+        view.addSubview(headerView)
+        
+        let titleLabel = UILabel()
+        titleLabel.text = "Редактор фотографий"
+        titleLabel.font = UIFont.boldSystemFont(ofSize: 20)
+        titleLabel.textColor = .label
+        headerView.addSubview(titleLabel)
+        
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "Обрежьте и примените фильтры"
+        subtitleLabel.font = UIFont.systemFont(ofSize: 14)
+        subtitleLabel.textColor = .systemGray
+        headerView.addSubview(subtitleLabel)
+        
+        headerView.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(10)
+            make.leading.trailing.equalToSuperview().inset(16)
+            make.height.equalTo(60)
+        }
+        
+        titleLabel.snp.makeConstraints { make in
+            make.top.equalToSuperview().offset(12)
+            make.leading.trailing.equalToSuperview().inset(16)
+        }
+        
+        subtitleLabel.snp.makeConstraints { make in
+            make.top.equalTo(titleLabel.snp.bottom).offset(2)
+            make.leading.trailing.equalToSuperview().inset(16)
+        }
         
         // Добавляем CropOverlayView поверх всего экрана
         view.addSubview(cropOverlayView)
@@ -266,12 +300,13 @@ class PhotoEditorViewController: UIViewController {
         }
         
         // Добавляем photoContainerView
+        photoContainerView.backgroundColor = .black
         view.addSubview(photoContainerView)
         photoContainerView.snp.makeConstraints { make in
             make.left.equalToSuperview().offset(16)
             make.right.equalToSuperview().inset(16)
-            make.centerY.equalToSuperview()
-            make.height.equalTo(photoContainerView.snp.width) // Квадратное соотношение сторон
+            make.top.equalTo(headerView.snp.bottom).offset(20)
+            make.bottom.equalTo(view.safeAreaLayoutGuide).offset(-200) // Оставляем место для элементов управления
         }
         
         // Добавляем ImageView напрямую в photoContainerView
@@ -297,7 +332,7 @@ class PhotoEditorViewController: UIViewController {
         // Добавляем коллекцию форматов изображений
         view.addSubview(aspectRatioCollectionView)
         aspectRatioCollectionView.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(20)
+            make.top.equalTo(photoContainerView.snp.bottom).offset(10)
             make.left.right.equalToSuperview()
             make.height.equalTo(50)
         }
@@ -305,9 +340,9 @@ class PhotoEditorViewController: UIViewController {
         // Добавляем коллекцию фильтров
         view.addSubview(filtersCollectionView)
         filtersCollectionView.snp.makeConstraints { make in
-            make.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).inset(100)
+            make.top.equalTo(aspectRatioCollectionView.snp.bottom).offset(10)
             make.left.right.equalToSuperview()
-            make.height.equalTo(120)
+            make.height.equalTo(100)
         }
         
         // Добавляем кнопки
@@ -315,9 +350,10 @@ class PhotoEditorViewController: UIViewController {
         buttonStackView.addArrangedSubview(cancelButton)
         buttonStackView.addArrangedSubview(saveButton)
         buttonStackView.snp.makeConstraints { make in
-            make.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).inset(20)
+            make.top.equalTo(filtersCollectionView.snp.bottom).offset(10)
             make.left.right.equalToSuperview().inset(16)
             make.height.equalTo(44)
+            make.bottom.lessThanOrEqualTo(view.safeAreaLayoutGuide).inset(10)
         }
     }
     

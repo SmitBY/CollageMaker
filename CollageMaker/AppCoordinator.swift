@@ -9,7 +9,7 @@ import UIKit
 import RxSwift
 import RxCocoa
 
-protocol Coordinator {
+protocol Coordinator: AnyObject {
     var childCoordinators: [Coordinator] { get set }
     var navigationController: UINavigationController { get set }
     
@@ -47,13 +47,13 @@ class AppCoordinator: Coordinator {
         childCoordinators.append(onboardingCoordinator)
     }
     
-    /// Configures and displays the Home screen using HomeTabBarCoordinator.
+    /// Configures and displays the Main screen using MainTabBarCoordinator.
     private func showHomeScreen() {
         
-        // Initialize the HomeTabBarCoordinator with the Home navigation controller.
-        let homeTabBarCoordinator = HomeTabBarCoordinator(navigationController: navigationController)
-        homeTabBarCoordinator.start()
-        childCoordinators.append(homeTabBarCoordinator)
+        // Initialize the MainTabBarCoordinator with the Main navigation controller.
+        let mainTabBarCoordinator = MainTabBarCoordinator(navigationController: navigationController)
+        mainTabBarCoordinator.start()
+        childCoordinators.append(mainTabBarCoordinator)
         
     }
 }

@@ -127,7 +127,7 @@ extension UserDefaults {
 /// It is initialized with a CollageEditorViewModel.
 class CollageEditorViewController: UIViewController {
     
-    weak var coordinator: HomeTabBarCoordinator?
+    weak var coordinator: (any Coordinator)?
     
     // MARK: - Properties
     
@@ -268,40 +268,55 @@ class CollageEditorViewController: UIViewController {
         view.backgroundColor = .systemBackground
         title = "Редактор коллажа"
         
+        // Настройка навигации в едином стиле
+        navigationController?.navigationBar.tintColor = .systemBlue
+        navigationController?.navigationBar.titleTextAttributes = [
+            .foregroundColor: UIColor.label,
+            .font: UIFont.boldSystemFont(ofSize: 18)
+        ]
+        
+        // Добавляем кнопку "Назад"
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            title: "Назад",
+            style: .plain,
+            target: self,
+            action: #selector(backButtonTapped)
+        )
+        
         // Настройка кнопки сохранения
         saveButton.setTitle("Сохранить", for: .normal)
         saveButton.titleLabel?.font = UIFont.boldSystemFont(ofSize: 18)
         saveButton.backgroundColor = .systemBlue
         saveButton.setTitleColor(.white, for: .normal)
-        saveButton.layer.cornerRadius = 8
+        saveButton.layer.cornerRadius = 25 // Более современный радиус
         
         // Настройка кнопки добавления текста
         addTextButton.setTitle("+ Текст", for: .normal)
         addTextButton.titleLabel?.font = UIFont.systemFont(ofSize: 16)
         addTextButton.backgroundColor = .systemGreen
         addTextButton.setTitleColor(.white, for: .normal)
-        addTextButton.layer.cornerRadius = 8
+        addTextButton.layer.cornerRadius = 20 // Более современный радиус
         
         // Настройка кнопки добавления стикеров
         addStickerButton.setTitle("😀", for: .normal)
         addStickerButton.titleLabel?.font = UIFont.systemFont(ofSize: 20)
         addStickerButton.backgroundColor = .systemPurple
         addStickerButton.setTitleColor(.white, for: .normal)
-        addStickerButton.layer.cornerRadius = 8
+        addStickerButton.layer.cornerRadius = 20
         
         // Настройка кнопки смены фона
         changeBackgroundButton.setTitle("Фон", for: .normal)
         changeBackgroundButton.titleLabel?.font = UIFont.systemFont(ofSize: 16)
         changeBackgroundButton.backgroundColor = .systemOrange
         changeBackgroundButton.setTitleColor(.white, for: .normal)
-        changeBackgroundButton.layer.cornerRadius = 8
+        changeBackgroundButton.layer.cornerRadius = 20
         
         // Настройка кнопки добавления изображения
         addImageButton.setTitle("+ 📷", for: .normal)
         addImageButton.titleLabel?.font = UIFont.systemFont(ofSize: 16)
         addImageButton.backgroundColor = .systemBlue
         addImageButton.setTitleColor(.white, for: .normal)
-        addImageButton.layer.cornerRadius = 8
+        addImageButton.layer.cornerRadius = 20
         
         // Настройка области коллажа
         collageView.backgroundColor = .lightGray
@@ -556,6 +571,16 @@ class CollageEditorViewController: UIViewController {
         
         currentIndexPath = IndexPath(item: imageView.tag, section: 0)
         presentImagePicker()
+    }
+    
+    @objc private func backButtonTapped() {
+        if let mainCoordinator = coordinator as? MainTabBarCoordinator {
+            mainCoordinator.returnToMain()
+        } else if let homeCoordinator = coordinator as? HomeTabBarCoordinator {
+            navigationController?.popViewController(animated: true)
+        } else {
+            navigationController?.popViewController(animated: true)
+        }
     }
     
     // MARK: - Creative Template Styling
@@ -1395,7 +1420,11 @@ class CollageEditorViewController: UIViewController {
         )
         
         alert.addAction(UIAlertAction(title: "Перейти в галерею", style: .default) { [weak self] _ in
-            self?.coordinator?.showGallery()
+            if let mainCoordinator = self?.coordinator as? MainTabBarCoordinator {
+                mainCoordinator.showGallery()
+            } else if let homeCoordinator = self?.coordinator as? HomeTabBarCoordinator {
+                homeCoordinator.showGallery()
+            }
         })
         
         alert.addAction(UIAlertAction(title: "OK", style: .cancel))
@@ -2156,34 +2185,44 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
         
         print("🎨 Открываем PhotoEditor для редактирования изображения")
         
-        coordinator.showPhotoEditor(with: image) { [weak self, weak imageView] editedImage in
-            guard let self = self, let imageView = imageView else { return }
-            
-            if let editedImage = editedImage {
-                print("✅ Получено отредактированное изображение из PhotoEditor")
-                
-                // Находим индекс изображения для обновления модели
-                if let tileView = imageView.superview,
-                   let gridContainer = self.collageView.viewWithTag(self.gridContainerTag),
-                   let index = gridContainer.subviews.firstIndex(of: tileView) {
-                    
-                    // Обновляем изображение в UI
-                    imageView.image = editedImage
-                    
-                    // Обновляем модель
-                    let indexPath = IndexPath(item: index, section: 0)
-                    self.viewModel.setImage(at: indexPath, image: editedImage)
-                    
-                    // Обновляем selectedPhotos массив
-                    if index < self.selectedPhotos.count {
-                        self.selectedPhotos[index] = editedImage
-                    }
-                    
-                    print("✅ Изображение обновлено в позиции \(index)")
-                }
-            } else {
-                print("ℹ️ Редактирование отменено пользователем")
+        if let mainCoordinator = coordinator as? MainTabBarCoordinator {
+            mainCoordinator.showPhotoEditor(with: image) { [weak self, weak imageView] editedImage in
+                self?.handleEditedImage(editedImage, for: imageView)
             }
+        } else if let homeCoordinator = coordinator as? HomeTabBarCoordinator {
+            homeCoordinator.showPhotoEditor(with: image) { [weak self, weak imageView] editedImage in
+                self?.handleEditedImage(editedImage, for: imageView)
+            }
+        }
+    }
+    
+    private func handleEditedImage(_ editedImage: UIImage?, for imageView: UIImageView?) {
+        guard let imageView = imageView else { return }
+        
+        if let editedImage = editedImage {
+            print("✅ Получено отредактированное изображение из PhotoEditor")
+            
+            // Находим индекс изображения для обновления модели
+            if let tileView = imageView.superview,
+               let gridContainer = self.collageView.viewWithTag(self.gridContainerTag),
+               let index = gridContainer.subviews.firstIndex(of: tileView) {
+                
+                // Обновляем изображение в UI
+                imageView.image = editedImage
+                
+                // Обновляем модель
+                let indexPath = IndexPath(item: index, section: 0)
+                self.viewModel.setImage(at: indexPath, image: editedImage)
+                
+                // Обновляем selectedPhotos массив
+                if index < self.selectedPhotos.count {
+                    self.selectedPhotos[index] = editedImage
+                }
+                
+                print("✅ Изображение обновлено в позиции \(index)")
+            }
+        } else {
+            print("ℹ️ Редактирование отменено пользователем")
         }
     }
     

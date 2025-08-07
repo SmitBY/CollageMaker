@@ -49,6 +49,8 @@ class SavedCollagesManager {
     private init() {}
     
     func saveCollage(_ collage: SavedCollage) {
+        print("💾 [SavedCollagesManager] Сохраняем коллаж: \(collage.templateName) с ID: \(collage.id)")
+        
         var savedCollages = getAllCollages()
         savedCollages.append(collage)
         
@@ -56,7 +58,14 @@ class SavedCollagesManager {
         if let imageData = collage.image.jpegData(compressionQuality: 0.8) {
             let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let imagePath = documentsPath.appendingPathComponent("\(collage.id).jpg")
-            try? imageData.write(to: imagePath)
+            do {
+                try imageData.write(to: imagePath)
+                print("✅ [SavedCollagesManager] Изображение сохранено: \(imagePath)")
+            } catch {
+                print("❌ [SavedCollagesManager] Ошибка сохранения изображения: \(error)")
+            }
+        } else {
+            print("❌ [SavedCollagesManager] Не удалось создать данные изображения")
         }
         
         // Сохраняем метаданные в UserDefaults
@@ -69,17 +78,24 @@ class SavedCollagesManager {
             ]
         }
         userDefaults.set(collageData, forKey: collagesKey)
+        print("✅ [SavedCollagesManager] Метаданные сохранены. Всего коллажей: \(savedCollages.count)")
     }
     
     func getAllCollages() -> [SavedCollage] {
+        print("📂 [SavedCollagesManager] Загружаем сохраненные коллажи...")
+        
         guard let collagesData = userDefaults.array(forKey: collagesKey) as? [[String: Any]] else {
+            print("📂 [SavedCollagesManager] Нет сохраненных коллажей в UserDefaults")
             return []
         }
         
-        return collagesData.compactMap { data -> SavedCollage? in
+        print("📂 [SavedCollagesManager] Найдено \(collagesData.count) записей в UserDefaults")
+        
+        let loadedCollages = collagesData.compactMap { data -> SavedCollage? in
             guard let id = data["id"] as? String,
                   let timestamp = data["createdDate"] as? TimeInterval,
                   let templateName = data["templateName"] as? String else {
+                print("⚠️ [SavedCollagesManager] Неполные данные для коллажа")
                 return nil
             }
             
@@ -91,9 +107,11 @@ class SavedCollagesManager {
             
             guard let imageData = try? Data(contentsOf: imagePath),
                   let image = UIImage(data: imageData) else {
+                print("⚠️ [SavedCollagesManager] Не удалось загрузить изображение для коллажа \(id)")
                 return nil
             }
             
+            print("✅ [SavedCollagesManager] Загружен коллаж: \(templateName) (\(id))")
             return SavedCollage(
                 id: id,
                 image: image,
@@ -102,6 +120,9 @@ class SavedCollagesManager {
                 aspectRatioId: aspectRatioId
             )
         }.sorted { $0.createdDate > $1.createdDate } // Сортируем по дате создания (новые сначала)
+        
+        print("📂 [SavedCollagesManager] Успешно загружено \(loadedCollages.count) коллажей")
+        return loadedCollages
     }
     
     func deleteCollage(withId id: String) {
