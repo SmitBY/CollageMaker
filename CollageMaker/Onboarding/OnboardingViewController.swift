@@ -33,6 +33,8 @@ class OnboardingViewController: UIViewController {
         setupBindings()
     }
     
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+    
     private func setupUI() {
         // Градиентный фон
         let gradientLayer = CAGradientLayer()
@@ -44,7 +46,7 @@ class OnboardingViewController: UIViewController {
         
         // Контейнер для контента
         let contentView = UIView()
-        contentView.backgroundColor = .systemBackground
+        contentView.backgroundColor = UIColor(white: 1.0, alpha: 0.08)
         contentView.layer.cornerRadius = 20
         contentView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         view.addSubview(contentView)

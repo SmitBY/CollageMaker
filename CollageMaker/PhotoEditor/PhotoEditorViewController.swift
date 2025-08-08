@@ -239,6 +239,9 @@ class PhotoEditorViewController: UIViewController {
         setupFiltersCollection()
         setupAspectRatioCollection()
     }
+
+    // Белый статус-бар поверх черного фона
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
@@ -257,24 +260,24 @@ class PhotoEditorViewController: UIViewController {
     
     // MARK: - UI Setup
     private func setupUI() {
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = .black
         
         // Добавляем верхний контейнер с заголовком
         let headerView = UIView()
-        headerView.backgroundColor = .systemGray6
+        headerView.backgroundColor = UIColor(white: 1.0, alpha: 0.08)
         headerView.layer.cornerRadius = 12
         view.addSubview(headerView)
         
         let titleLabel = UILabel()
         titleLabel.text = "Редактор фотографий"
         titleLabel.font = UIFont.boldSystemFont(ofSize: 20)
-        titleLabel.textColor = .label
+        titleLabel.textColor = .white
         headerView.addSubview(titleLabel)
         
         let subtitleLabel = UILabel()
         subtitleLabel.text = "Обрежьте и примените фильтры"
         subtitleLabel.font = UIFont.systemFont(ofSize: 14)
-        subtitleLabel.textColor = .systemGray
+        subtitleLabel.textColor = .lightGray
         headerView.addSubview(subtitleLabel)
         
         headerView.snp.makeConstraints { make in

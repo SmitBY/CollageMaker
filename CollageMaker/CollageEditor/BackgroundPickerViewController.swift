@@ -73,14 +73,17 @@ class BackgroundPickerViewController: UIViewController {
         setupBindings()
         loadBackgroundImages()
     }
+
+    // Белый статус-бар для модального затемнения
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
     
     // MARK: - Setup
     
     private func setupUI() {
-        view.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        view.backgroundColor = UIColor.black.withAlphaComponent(0.8)
         
         // Настройка контейнера
-        containerView.backgroundColor = .systemBackground
+        containerView.backgroundColor = UIColor(white: 1.0, alpha: 0.06)
         containerView.layer.cornerRadius = 16
         containerView.layer.shadowColor = UIColor.black.cgColor
         containerView.layer.shadowOffset = CGSize(width: 0, height: 4)
@@ -91,6 +94,7 @@ class BackgroundPickerViewController: UIViewController {
         titleLabel.text = "Выбор фона"
         titleLabel.font = UIFont.boldSystemFont(ofSize: 20)
         titleLabel.textAlignment = .center
+        titleLabel.textColor = .white
         
         // Настройка кнопки закрытия
         closeButton.setImage(UIImage(systemName: "xmark"), for: .normal)
@@ -98,6 +102,7 @@ class BackgroundPickerViewController: UIViewController {
         
         // Настройка секции цветов
         colorSectionLabel.text = "Цвет фона"
+        colorSectionLabel.textColor = .white
         colorSectionLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
         
         colorCollectionView.backgroundColor = .clear
@@ -112,6 +117,7 @@ class BackgroundPickerViewController: UIViewController {
         
         // Настройка секции фонов
         backgroundSectionLabel.text = "Готовые фоны"
+        backgroundSectionLabel.textColor = .white
         backgroundSectionLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
         
         backgroundCollectionView.backgroundColor = .clear

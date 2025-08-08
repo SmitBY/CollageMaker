@@ -28,7 +28,7 @@ class EditViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .white
+        view.backgroundColor = .black
         
         let label = UILabel()
         label.text = "Edit Photos Screen"

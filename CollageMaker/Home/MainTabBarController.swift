@@ -115,7 +115,7 @@ class MainTabBarController: UIViewController {
     // MARK: - Setup
     
     private func setupUI() {
-        view.backgroundColor = .clear
+        view.backgroundColor = .black
         
         view.addSubview(containerView)
         view.addSubview(customTabBar)
@@ -216,7 +216,14 @@ class MainTabBarController: UIViewController {
             containerView.addSubview(newVC.view)
             newVC.didMove(toParent: self)
         }
+        
+        // Обновляем стиль статус-бара после смены вкладки
+        setNeedsStatusBarAppearanceUpdate()
     }
+
+    // MARK: - Status Bar
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+    override var childForStatusBarStyle: UIViewController? { nil }
     
     private func createViewController(for index: Int) -> UIViewController? {
         switch index {
@@ -239,7 +246,7 @@ class MainTabBarController: UIViewController {
     
     private func createTemplatesViewController() -> UIViewController {
         let vc = UIViewController()
-        vc.view.backgroundColor = .systemBackground
+        vc.view.backgroundColor = .black
         
         // Container для контента
         let containerView = UIView()
@@ -327,7 +334,7 @@ class MainTabBarController: UIViewController {
     
     private func createMoreViewController() -> UIViewController {
         let vc = UIViewController()
-        vc.view.backgroundColor = .systemBackground
+        vc.view.backgroundColor = .black
         
         // ScrollView для контента
         let scrollView = UIScrollView()

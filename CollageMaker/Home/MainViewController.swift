@@ -107,6 +107,8 @@ class MainViewController: UIViewController {
         setupActions()
     }
     
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+    
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         gradientLayer.frame = view.bounds

@@ -21,7 +21,7 @@ class HomeViewController: UIViewController {
     // Контейнер для фотографий (основная часть экрана)
     let photosContainerView: UIView = {
         let view = UIView()
-        view.backgroundColor = .systemGray6
+        view.backgroundColor = UIColor(white: 1.0, alpha: 0.06)
         return view
     }()
     
@@ -30,6 +30,7 @@ class HomeViewController: UIViewController {
         label.text = "Фотографии"
         label.font = UIFont.boldSystemFont(ofSize: 18)
         label.textAlignment = .left
+        label.textColor = .white
         return label
     }()
     
@@ -47,7 +48,7 @@ class HomeViewController: UIViewController {
     // Контейнер для шаблонов снизу (компактный)
     let templatesContainerView: UIView = {
         let view = UIView()
-        view.backgroundColor = .systemGray6
+        view.backgroundColor = UIColor(white: 1.0, alpha: 0.06)
         return view
     }()
     
@@ -56,6 +57,7 @@ class HomeViewController: UIViewController {
         label.text = "Шаблоны коллажей"
         label.font = UIFont.boldSystemFont(ofSize: 16)
         label.textAlignment = .left
+        label.textColor = .white
         return label
     }()
     
@@ -103,7 +105,7 @@ class HomeViewController: UIViewController {
     // MARK: - UI Setup
     
     private func setupUI() {
-        view.backgroundColor = .white
+        view.backgroundColor = .black
         
         // Добавляем все элементы интерфейса
         view.addSubview(photosContainerView)

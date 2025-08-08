@@ -133,6 +133,7 @@ class HomeTabBarController: UIViewController {
     
     private func setupUI() {
         // Add subviews
+        view.backgroundColor = .black
         view.addSubview(titleLabel)
         view.addSubview(settingsButton)
         view.addSubview(containerView)
@@ -244,7 +245,8 @@ class HomeTabBarController: UIViewController {
             print("GalleryViewModel is nil")
             return nil
         }
-        return GalleryViewController(viewModel: galleryVM)
+        let vc = GalleryViewController(viewModel: galleryVM)
+        return vc
     }
     
     private func createHomeViewController() -> HomeViewController? {
@@ -252,7 +254,8 @@ class HomeTabBarController: UIViewController {
             print("HomeViewModel is nil")
             return nil
         }
-        return HomeViewController(viewModel: homeVM)
+        let vc = HomeViewController(viewModel: homeVM)
+        return vc
     }
     
     private func createEditViewController() -> EditViewController? {
@@ -260,7 +263,8 @@ class HomeTabBarController: UIViewController {
             print("EditViewModel is nil")
             return nil
         }
-        return EditViewController(viewModel: editVM)
+        let vc = EditViewController(viewModel: editVM)
+        return vc
     }
     
     // MARK: - Data Loading Observation

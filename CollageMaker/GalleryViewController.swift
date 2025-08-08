@@ -27,7 +27,7 @@ class GalleryCollectionViewCell: UICollectionViewCell {
         let button = UIButton(type: .system)
         button.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
         button.tintColor = .red
-        button.backgroundColor = .white
+        button.backgroundColor = UIColor(white: 1.0, alpha: 0.9)
         button.layer.cornerRadius = 12
         return button
     }()
@@ -103,7 +103,7 @@ class GalleryViewController: UIViewController {
         layout.sectionInset = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        collectionView.backgroundColor = .systemBackground
+        collectionView.backgroundColor = .black
         collectionView.register(GalleryCollectionViewCell.self, forCellWithReuseIdentifier: GalleryCollectionViewCell.identifier)
         return collectionView
     }()
@@ -163,30 +163,32 @@ class GalleryViewController: UIViewController {
         setupCollectionView()
     }
     
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+    
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         viewModel.loadSavedCollages()
     }
     
     private func setupUI() {
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = .black
         
         // Добавляем заголовок экрана
         let headerView = UIView()
-        headerView.backgroundColor = .systemGray6
+        headerView.backgroundColor = UIColor(white: 1.0, alpha: 0.08)
         headerView.layer.cornerRadius = 12
         view.addSubview(headerView)
         
         let titleLabel = UILabel()
         titleLabel.text = "Галерея коллажей"
         titleLabel.font = UIFont.boldSystemFont(ofSize: 24)
-        titleLabel.textColor = .label
+        titleLabel.textColor = .white
         headerView.addSubview(titleLabel)
         
         let subtitleLabel = UILabel()
         subtitleLabel.text = "Ваши сохраненные работы"
         subtitleLabel.font = UIFont.systemFont(ofSize: 16)
-        subtitleLabel.textColor = .systemGray
+        subtitleLabel.textColor = .lightGray
         headerView.addSubview(subtitleLabel)
         
         headerView.snp.makeConstraints { make in

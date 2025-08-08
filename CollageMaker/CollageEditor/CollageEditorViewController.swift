@@ -261,17 +261,20 @@ class CollageEditorViewController: UIViewController {
             fillCollageWithSelectedPhotos()
         }
     }
+
+    // Предпочитаем белый текст статус-бара
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
     
     // MARK: - UI Setup
     
     private func setupUI() {
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = .black
         title = "Редактор коллажа"
         
         // Настройка навигации в едином стиле
         navigationController?.navigationBar.tintColor = .systemBlue
         navigationController?.navigationBar.titleTextAttributes = [
-            .foregroundColor: UIColor.label,
+            .foregroundColor: UIColor.white,
             .font: UIFont.boldSystemFont(ofSize: 18)
         ]
         
@@ -329,7 +332,7 @@ class CollageEditorViewController: UIViewController {
         backgroundImageView.layer.cornerRadius = 12
         
         // Настройка контейнера для ползунков
-        slidersContainerView.backgroundColor = .systemBackground
+        slidersContainerView.backgroundColor = UIColor(white: 1.0, alpha: 0.06)
         slidersContainerView.layer.cornerRadius = 8
         slidersContainerView.layer.borderWidth = 1
         slidersContainerView.layer.borderColor = UIColor.systemGray4.cgColor

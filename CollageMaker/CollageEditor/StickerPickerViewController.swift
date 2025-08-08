@@ -36,7 +36,7 @@ class StickerPickerViewController: UIViewController {
         layout.sectionInset = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        collectionView.backgroundColor = .systemBackground
+        collectionView.backgroundColor = .black
         collectionView.allowsMultipleSelection = true
         return collectionView
     }()
@@ -46,13 +46,14 @@ class StickerPickerViewController: UIViewController {
         label.text = "Выберите стикер"
         label.font = UIFont.boldSystemFont(ofSize: 20)
         label.textAlignment = .center
+        label.textColor = .white
         return label
     }()
     
     private let closeButton: UIButton = {
         let button = UIButton(type: .system)
         button.setImage(UIImage(systemName: "xmark"), for: .normal)
-        button.tintColor = .systemGray
+        button.tintColor = .lightGray
         return button
     }()
     
@@ -87,6 +88,7 @@ class StickerPickerViewController: UIViewController {
         setupUI()
         setupConstraints()
         setupActions()
+        if #available(iOS 13.0, *) { overrideUserInterfaceStyle = .dark }
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -97,7 +99,7 @@ class StickerPickerViewController: UIViewController {
     
     // MARK: - Setup
     private func setupUI() {
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = .black
         
         // Регистрируем ячейку после создания collectionView
         collectionView.register(StickerCell.self, forCellWithReuseIdentifier: StickerCell.identifier)
@@ -106,6 +108,7 @@ class StickerPickerViewController: UIViewController {
         
         // Настройка CategoryTabView
         categoryTabView.delegate = self
+        categoryTabView.backgroundColor = .black
         
         view.addSubview(titleLabel)
         view.addSubview(closeButton)
@@ -114,6 +117,8 @@ class StickerPickerViewController: UIViewController {
         view.addSubview(collectionView)
         view.addSubview(applySelectionButton)
     }
+
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
     
     private func setupConstraints() {
         titleLabel.snp.makeConstraints { make in
