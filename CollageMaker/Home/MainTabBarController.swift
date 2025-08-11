@@ -246,61 +246,23 @@ class MainTabBarController: UIViewController {
     
     private func createTemplatesViewController() -> UIViewController {
         let vc = UIViewController()
-        vc.view.backgroundColor = .black
-        
-        // Container для контента
-        let containerView = UIView()
-        containerView.backgroundColor = .systemGray6
-        containerView.layer.cornerRadius = 12
-        vc.view.addSubview(containerView)
-        
-        // Заголовок
+        // Фон: mainback
+        vc.removeBackgroundGradientLayers()
+        vc.setBackgroundImage(named: "mainback")
+
+        // Заголовок по центру сверху
         let titleLabel = UILabel()
-        titleLabel.text = "Шаблоны коллажей"
-        titleLabel.font = UIFont.boldSystemFont(ofSize: 20)
-        titleLabel.textAlignment = .left
-        containerView.addSubview(titleLabel)
-        
-        // Описание
-        let descriptionLabel = UILabel()
-        descriptionLabel.text = "Выберите готовый шаблон для создания коллажа"
-        descriptionLabel.font = UIFont.systemFont(ofSize: 16)
-        descriptionLabel.textColor = .systemGray
-        descriptionLabel.textAlignment = .left
-        descriptionLabel.numberOfLines = 0
-        containerView.addSubview(descriptionLabel)
-        
-        // Иконка
-        let iconImageView = UIImageView()
-        iconImageView.image = UIImage(systemName: "rectangle.grid.2x2")
-        iconImageView.tintColor = .systemBlue
-        iconImageView.contentMode = .scaleAspectFit
-        containerView.addSubview(iconImageView)
-        
-        // Constraints
-        containerView.snp.makeConstraints { make in
-            make.center.equalToSuperview()
-            make.leading.trailing.equalToSuperview().inset(20)
-            make.height.equalTo(200)
-        }
-        
-        iconImageView.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(20)
-            make.centerX.equalToSuperview()
-            make.size.equalTo(50)
-        }
-        
+        titleLabel.text = "Templates"
+        titleLabel.font = UIFont.boldSystemFont(ofSize: 24)
+        titleLabel.textColor = .white
+        titleLabel.textAlignment = .center
+        vc.view.addSubview(titleLabel)
+
         titleLabel.snp.makeConstraints { make in
-            make.top.equalTo(iconImageView.snp.bottom).offset(16)
-            make.leading.trailing.equalToSuperview().inset(16)
+            make.top.equalTo(vc.view.safeAreaLayoutGuide).offset(16)
+            make.centerX.equalToSuperview()
         }
-        
-        descriptionLabel.snp.makeConstraints { make in
-            make.top.equalTo(titleLabel.snp.bottom).offset(8)
-            make.leading.trailing.equalToSuperview().inset(16)
-            make.bottom.lessThanOrEqualToSuperview().inset(20)
-        }
-        
+
         return vc
     }
     

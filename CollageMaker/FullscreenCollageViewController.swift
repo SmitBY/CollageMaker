@@ -101,7 +101,8 @@ class FullscreenCollageViewController: UIViewController {
     
     // MARK: - Setup Methods
     private func setupUI() {
-        view.backgroundColor = .black
+        removeBackgroundGradientLayers()
+        setBackgroundImage(named: "loadback")
         
         // Добавляем элементы на view
         view.addSubview(scrollView)

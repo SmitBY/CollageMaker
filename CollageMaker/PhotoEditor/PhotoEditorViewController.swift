@@ -260,7 +260,8 @@ class PhotoEditorViewController: UIViewController {
     
     // MARK: - UI Setup
     private func setupUI() {
-        view.backgroundColor = .black
+        removeBackgroundGradientLayers()
+        setBackgroundImage(named: "loadback")
         
         // Добавляем верхний контейнер с заголовком
         let headerView = UIView()

@@ -171,7 +171,8 @@ class GalleryViewController: UIViewController {
     }
     
     private func setupUI() {
-        view.backgroundColor = .black
+        removeBackgroundGradientLayers()
+        setBackgroundImage(named: "loadback")
         
         // Добавляем заголовок экрана
         let headerView = UIView()

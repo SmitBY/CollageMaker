@@ -105,7 +105,9 @@ class HomeViewController: UIViewController {
     // MARK: - UI Setup
     
     private func setupUI() {
-        view.backgroundColor = .black
+        // Фон: изображение для остальных экранов
+        removeBackgroundGradientLayers()
+        setBackgroundImage(named: "loadback")
         
         // Добавляем все элементы интерфейса
         view.addSubview(photosContainerView)

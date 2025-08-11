@@ -36,13 +36,9 @@ class OnboardingViewController: UIViewController {
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
     
     private func setupUI() {
-        // Градиентный фон
-        let gradientLayer = CAGradientLayer()
-        gradientLayer.colors = [UIColor.systemBlue.cgColor, UIColor.systemPurple.cgColor]
-        gradientLayer.startPoint = CGPoint(x: 0, y: 0)
-        gradientLayer.endPoint = CGPoint(x: 1, y: 1)
-        gradientLayer.frame = view.bounds
-        view.layer.insertSublayer(gradientLayer, at: 0)
+        // Фоновое изображение вместо градиента
+        removeBackgroundGradientLayers()
+        setBackgroundImage(named: "loadback")
         
         // Контейнер для контента
         let contentView = UIView()
@@ -113,10 +109,7 @@ class OnboardingViewController: UIViewController {
             make.height.equalTo(50)
         }
         
-        // Обновляем размер градиента при изменении размеров view
-        DispatchQueue.main.async {
-            gradientLayer.frame = self.view.bounds
-        }
+        // Ничего не требуется, фон тянется Auto Layout'ом
     }
     
     private func setupBindings() {

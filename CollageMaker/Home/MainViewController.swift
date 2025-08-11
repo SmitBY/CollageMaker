@@ -21,10 +21,10 @@ class MainViewController: UIViewController {
     
     private let templatesLabel: UILabel = {
         let label = UILabel()
-        label.text = "Templates"
-        label.font = UIFont.boldSystemFont(ofSize: 28)
+        label.text = "CMPRO"
+        label.font = UIFont.boldSystemFont(ofSize: 20)
         label.textColor = .white
-        label.textAlignment = .left
+        label.textAlignment = .center
         return label
     }()
     
@@ -33,29 +33,92 @@ class MainViewController: UIViewController {
         button.setTitle("TRY PREMIUM", for: .normal)
         button.setTitleColor(.white, for: .normal)
         button.titleLabel?.font = UIFont.boldSystemFont(ofSize: 12)
-        button.backgroundColor = UIColor.systemPurple.withAlphaComponent(0.8)
+        button.backgroundColor = UIColor.black
         button.layer.cornerRadius = 12
         button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
         return button
     }()
-    
-    private let gradientLayer: CAGradientLayer = {
-        let gradient = CAGradientLayer()
-        gradient.colors = [
-            UIColor.systemOrange.cgColor,
-            UIColor.systemPurple.cgColor,
-            UIColor.systemBlue.cgColor
-        ]
-        gradient.locations = [0.0, 0.5, 1.0]
-        gradient.startPoint = CGPoint(x: 0, y: 0)
-        gradient.endPoint = CGPoint(x: 1, y: 1)
-        return gradient
+
+    // Баннер под заголовком
+    private let bannerContainerView: UIView = {
+        let view = UIView()
+        view.layer.cornerRadius = 16
+        view.layer.masksToBounds = true
+        return view
     }()
+
+    private let bannerImageView: UIImageView = {
+        let imageView = UIImageView()
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        imageView.image = UIImage(named: "Mask")
+        return imageView
+    }()
+
+    private let bannerTitleLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Try CMPRO Premium"
+        label.font = UIFont.boldSystemFont(ofSize: 18)
+        label.textColor = .white
+        label.textAlignment = .center
+        return label
+    }()
+
+    private let bannerSubtitleLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Start your 7 days free trial"
+        label.font = UIFont.systemFont(ofSize: 14)
+        label.textColor = .white
+        label.textAlignment = .center
+        return label
+    }()
+    
+    // Градиент больше не используется — фон будет изображением из ассетов
     
     private let contentView: UIView = {
         let view = UIView()
         view.backgroundColor = .clear
         return view
+    }()
+
+    // Секция под баннером: слева заголовок, справа кнопка See More
+    private let topTemplatesLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Top Templetes"
+        label.font = UIFont.boldSystemFont(ofSize: 18)
+        label.textColor = .white
+        label.textAlignment = .left
+        return label
+    }()
+
+    private let seeMoreButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("See More", for: .normal)
+        button.setTitleColor(.white, for: .normal)
+        button.titleLabel?.font = UIFont.boldSystemFont(ofSize: 14)
+        button.backgroundColor = .black
+        button.layer.cornerRadius = 12
+        button.contentHorizontalAlignment = .left
+        button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 36)
+        return button
+    }()
+
+    private let seeMoreRightCircle: UIView = {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.layer.cornerRadius = 12
+        view.layer.borderWidth = 1
+        view.layer.borderColor = UIColor.white.cgColor
+        return view
+    }()
+
+    private let seeMoreArrowLabel: UILabel = {
+        let label = UILabel()
+        label.text = ">"
+        label.textColor = .white
+        label.font = UIFont.boldSystemFont(ofSize: 14)
+        label.textAlignment = .center
+        return label
     }()
     
     private let folderImageView: UIImageView = {
@@ -111,25 +174,32 @@ class MainViewController: UIViewController {
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        gradientLayer.frame = view.bounds
     }
     
     // MARK: - Setup
     
     private func setupUI() {
-        // Добавляем градиентный фон
-        view.layer.insertSublayer(gradientLayer, at: 0)
+        // Убираем возможные градиенты и ставим фоновое изображение главного экрана
+        removeBackgroundGradientLayers()
+        setBackgroundImage(named: "mainback")
         
         // Добавляем все элементы
         view.addSubview(headerView)
         headerView.addSubview(templatesLabel)
-        headerView.addSubview(premiumButton)
+        // Кнопку "TRY PREMIUM" переносим на баннер
+
+        // Добавляем баннер
+        view.addSubview(bannerContainerView)
+        bannerContainerView.addSubview(bannerImageView)
+        bannerContainerView.addSubview(bannerTitleLabel)
+        bannerContainerView.addSubview(bannerSubtitleLabel)
+        bannerContainerView.addSubview(premiumButton)
         
         view.addSubview(contentView)
-        contentView.addSubview(folderImageView)
-        contentView.addSubview(titleLabel)
-        contentView.addSubview(subtitleLabel)
-        contentView.addSubview(createProjectButton)
+        contentView.addSubview(topTemplatesLabel)
+        contentView.addSubview(seeMoreButton)
+        seeMoreButton.addSubview(seeMoreRightCircle)
+        seeMoreRightCircle.addSubview(seeMoreArrowLabel)
         
         // Настраиваем constraints
         headerView.snp.makeConstraints { make in
@@ -139,47 +209,69 @@ class MainViewController: UIViewController {
         }
         
         templatesLabel.snp.makeConstraints { make in
-            make.leading.centerY.equalToSuperview()
+            make.centerX.centerY.equalToSuperview()
         }
         
+        bannerContainerView.snp.makeConstraints { make in
+            make.top.equalTo(headerView.snp.bottom).offset(16)
+            make.leading.trailing.equalToSuperview().inset(20)
+            make.height.equalTo(140)
+        }
+
+        bannerImageView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+
+        bannerTitleLabel.snp.makeConstraints { make in
+            make.top.equalToSuperview().offset(16)
+            make.leading.trailing.equalToSuperview().inset(16)
+        }
+
+        bannerSubtitleLabel.snp.makeConstraints { make in
+            make.top.equalTo(bannerTitleLabel.snp.bottom).offset(8)
+            make.leading.trailing.equalToSuperview().inset(16)
+        }
+
         premiumButton.snp.makeConstraints { make in
-            make.trailing.centerY.equalToSuperview()
-            make.height.equalTo(24)
+            make.top.equalTo(bannerSubtitleLabel.snp.bottom).offset(12)
+            make.centerX.equalToSuperview()
+            make.height.equalTo(28)
         }
         
         contentView.snp.makeConstraints { make in
+            make.top.equalTo(bannerContainerView.snp.bottom).offset(16)
+            make.leading.trailing.equalToSuperview().inset(20)
+            make.height.equalTo(40)
+        }
+
+        topTemplatesLabel.snp.makeConstraints { make in
+            make.leading.equalToSuperview()
+            make.centerY.equalToSuperview()
+            make.trailing.lessThanOrEqualTo(seeMoreButton.snp.leading).offset(-12)
+        }
+
+        seeMoreButton.snp.makeConstraints { make in
+            make.trailing.equalToSuperview()
+            make.centerY.equalToSuperview()
+            make.height.equalTo(32)
+            make.width.greaterThanOrEqualTo(140)
+        }
+
+        seeMoreRightCircle.snp.makeConstraints { make in
+            make.centerY.equalToSuperview()
+            make.trailing.equalToSuperview().inset(8)
+            make.width.height.equalTo(24)
+        }
+
+        seeMoreArrowLabel.snp.makeConstraints { make in
             make.center.equalToSuperview()
-            make.width.equalToSuperview().inset(40)
-        }
-        
-        folderImageView.snp.makeConstraints { make in
-            make.top.equalToSuperview()
-            make.centerX.equalToSuperview()
-            make.size.equalTo(80)
-        }
-        
-        titleLabel.snp.makeConstraints { make in
-            make.top.equalTo(folderImageView.snp.bottom).offset(20)
-            make.leading.trailing.equalToSuperview()
-        }
-        
-        subtitleLabel.snp.makeConstraints { make in
-            make.top.equalTo(titleLabel.snp.bottom).offset(12)
-            make.leading.trailing.equalToSuperview()
-        }
-        
-        createProjectButton.snp.makeConstraints { make in
-            make.top.equalTo(subtitleLabel.snp.bottom).offset(30)
-            make.centerX.equalToSuperview()
-            make.height.equalTo(50)
-            make.width.equalTo(200)
-            make.bottom.equalToSuperview()
         }
     }
     
     private func setupActions() {
         createProjectButton.addTarget(self, action: #selector(createProjectTapped), for: .touchUpInside)
         premiumButton.addTarget(self, action: #selector(premiumTapped), for: .touchUpInside)
+        seeMoreButton.addTarget(self, action: #selector(seeMoreTapped), for: .touchUpInside)
     }
     
     // MARK: - Actions
@@ -196,5 +288,12 @@ class MainViewController: UIViewController {
         let alert = UIAlertController(title: "Premium", message: "Функция Premium будет доступна в следующих обновлениях!", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+
+    @objc private func seeMoreTapped() {
+        // Перейти на вкладку Templates
+        if let parent = self.parent as? MainTabBarController {
+            parent.selectTab(index: 1)
+        }
     }
 }
