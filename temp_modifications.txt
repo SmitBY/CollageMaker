@@ -1,0 +1,52 @@
+# Шаг 1: Добавить import PhotosUI после import Photos
+/import Photos/a\
+import PhotosUI
+
+# Шаг 2: Добавить кнопку после changeBackgroundButton
+/private let changeBackgroundButton = UIButton(type: .system)/a\
+    private let addImageButton = UIButton(type: .system)
+
+# Шаг 3: Добавить переменные для frame picker
+/private var textLayers: \[TextLayerView\] = \[\]/a\
+    \
+    // Frame picker для добавления изображений\
+    private var framePickerView: FramePickerView?\
+    private var isAddingNewImageWithFrame = false\
+    private var selectedImageForFraming: UIImage?
+
+# Шаг 4: Настройка кнопки добавления изображения
+/changeBackgroundButton.layer.cornerRadius = 8/a\
+        \
+        // Настройка кнопки добавления изображения\
+        addImageButton.setTitle("+ 📷", for: .normal)\
+        addImageButton.titleLabel?.font = UIFont.systemFont(ofSize: 16)\
+        addImageButton.backgroundColor = .systemBlue\
+        addImageButton.setTitleColor(.white, for: .normal)\
+        addImageButton.layer.cornerRadius = 8
+
+# Шаг 5: Добавить в иерархию view
+/view.addSubview(changeBackgroundButton)/a\
+        view.addSubview(addImageButton)
+
+# Шаг 6: Добавить constraints
+/make.height.equalTo(40)/a\
+        }\
+        \
+        addImageButton.snp.makeConstraints { make in\
+            make.trailing.equalTo(changeBackgroundButton.snp.leading).offset(-10)\
+            make.bottom.equalTo(slidersContainerView.snp.top).offset(-10)\
+            make.width.equalTo(70)\
+            make.height.equalTo(40)
+
+# Шаг 7: Добавить в ensureButtonsOnTop
+/view.bringSubviewToFront(changeBackgroundButton)/a\
+        view.bringSubviewToFront(addImageButton)
+
+# Шаг 8: Добавить обработчик нажатия
+/.disposed(by: disposeBag)/a\
+        \
+        addImageButton.rx.tap\
+            .subscribe(onNext: { [weak self] in\
+                self?.showImagePickerWithFrameSelection()\
+            })\
+            .disposed(by: disposeBag)

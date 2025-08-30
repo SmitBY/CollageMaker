@@ -16,17 +16,17 @@
                         <color key="backgroundColor" red="0" green="0" blue="0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <subviews>
                             <imageView userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="loadback" translatesAutoresizingMaskIntoConstraints="NO" id="BG-IMG-LOAD">
-                                <rect key="frame" x="0" y="0" width="375" height="667"/>
+                                <rect key="frame" x="0" y="0" width="0" height="0"/>
                             </imageView>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="CMPRO" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" translatesAutoresizingMaskIntoConstraints="NO" id="CMP-RO-LBL">
                                 <rect key="frame" x="137.5" y="373" width="100" height="48"/>
-                                <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="40"/>
+                                <fontDescription key="fontDescription" type="custom" name="Roboto-Bold" pointSize="48"/>
                                 <color key="textColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Collage Maker you've dreamed about" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" translatesAutoresizingMaskIntoConstraints="NO" id="SUB-LBL">
                                 <rect key="frame" x="60" y="429" width="255" height="21"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="16"/>
+                                <fontDescription key="fontDescription" type="custom" name="Roboto-Regular" pointSize="14"/>
                                 <color key="textColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
@@ -37,7 +37,7 @@
                             <constraint firstItem="BG-IMG-LOAD" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" id="bg-leading"/>
                             <constraint firstItem="BG-IMG-LOAD" firstAttribute="trailing" secondItem="Ze5-6b-2t3" secondAttribute="trailing" id="bg-trailing"/>
                             <constraint firstItem="CMP-RO-LBL" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="CMP-RO-centerX"/>
-                            <constraint firstItem="CMP-RO-LBL" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="40" id="CMP-RO-centerY"/>
+                            <constraint firstItem="CMP-RO-LBL" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" multiplier="1.536" id="CMP-RO-centerY"/>
                             <constraint firstItem="SUB-LBL" firstAttribute="top" secondItem="CMP-RO-LBL" secondAttribute="bottom" constant="8" id="SUB-top"/>
                             <constraint firstItem="SUB-LBL" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="SUB-centerX"/>
                         </constraints>

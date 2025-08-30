@@ -35,7 +35,13 @@ class ArchTextView: UIView {
             setNeedsDisplay()
         }
     }
-    
+
+    var textAlignment: NSTextAlignment = .center {
+        didSet {
+            setNeedsDisplay()
+        }
+    }
+
     // MARK: - Initialization
     
     override init(frame: CGRect) {
@@ -62,21 +68,44 @@ class ArchTextView: UIView {
     }
     
     private func drawStraightText(in context: CGContext, rect: CGRect) {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = textAlignment
+        paragraphStyle.lineBreakMode = .byWordWrapping
+
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: textColor
+            .foregroundColor: textColor,
+            .paragraphStyle: paragraphStyle
         ]
-        
+
         let attributedString = NSAttributedString(string: text, attributes: attributes)
-        let textSize = attributedString.size()
-        
+
+        // Рассчитываем размер текста правильно для многострочного текста
+        let maxSize = CGSize(width: rect.width, height: rect.height)
+        let textRect = attributedString.boundingRect(with: maxSize,
+                                                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                                                    context: nil)
+
+        // Определяем X координату в зависимости от выравнивания
+        var x: CGFloat
+        switch textAlignment {
+        case .left:
+            x = 0
+        case .center:
+            x = (rect.width - textRect.width) / 2
+        case .right:
+            x = rect.width - textRect.width
+        default:
+            x = (rect.width - textRect.width) / 2
+        }
+
         let drawRect = CGRect(
-            x: (rect.width - textSize.width) / 2,
-            y: (rect.height - textSize.height) / 2,
-            width: textSize.width,
-            height: textSize.height
+            x: x,
+            y: (rect.height - textRect.height) / 2,
+            width: textRect.width,
+            height: textRect.height
         )
-        
+
         attributedString.draw(in: drawRect)
     }
     

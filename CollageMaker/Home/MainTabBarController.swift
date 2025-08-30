@@ -14,7 +14,7 @@ class MainTabBarController: UIViewController {
     
     // MARK: - Properties
     
-    weak var coordinator: MainTabBarCoordinator?
+    weak var coordinator: (any Coordinator)?
     private let disposeBag = DisposeBag()
     
     // MARK: - UI Elements
@@ -35,7 +35,7 @@ class MainTabBarController: UIViewController {
         let stackView = UIStackView()
         stackView.axis = .horizontal
         stackView.distribution = .fillEqually
-        stackView.alignment = .center
+        stackView.alignment = .bottom
         return stackView
     }()
     
@@ -44,9 +44,7 @@ class MainTabBarController: UIViewController {
         let button = UIButton(type: .custom)
         button.setImage(UIImage(named: "Home"), for: .normal)
         button.setTitle("Home", for: .normal)
-        button.setTitleColor(.white, for: .normal)
-        button.setTitleColor(.systemBlue, for: .selected)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 10)
+        // Цвет текста будет установлен через UIButton.Configuration
         button.imageView?.contentMode = .scaleAspectFit
         button.tintColor = .white
         return button
@@ -56,9 +54,7 @@ class MainTabBarController: UIViewController {
         let button = UIButton(type: .custom)
         button.setImage(UIImage(named: "Template"), for: .normal)
         button.setTitle("Templates", for: .normal)
-        button.setTitleColor(.white, for: .normal)
-        button.setTitleColor(.systemBlue, for: .selected)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 10)
+        // Цвет текста будет установлен через UIButton.Configuration
         button.imageView?.contentMode = .scaleAspectFit
         button.tintColor = .white
         return button
@@ -67,10 +63,11 @@ class MainTabBarController: UIViewController {
     private let createButton: UIButton = {
         let button = UIButton(type: .custom)
         button.setImage(UIImage(named: "Create"), for: .normal)
+        // Убираем текст с центральной кнопки Create
+        button.setTitle("", for: .normal)
         button.imageView?.contentMode = .scaleAspectFit
         button.tintColor = .white
-        button.backgroundColor = UIColor.systemPurple
-        button.layer.cornerRadius = 25
+        button.backgroundColor = .clear
         return button
     }()
     
@@ -78,9 +75,7 @@ class MainTabBarController: UIViewController {
         let button = UIButton(type: .custom)
         button.setImage(UIImage(named: "Projects"), for: .normal)
         button.setTitle("Projects", for: .normal)
-        button.setTitleColor(.white, for: .normal)
-        button.setTitleColor(.systemBlue, for: .selected)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 10)
+        // Цвет текста будет установлен через UIButton.Configuration
         button.imageView?.contentMode = .scaleAspectFit
         button.tintColor = .white
         return button
@@ -90,9 +85,7 @@ class MainTabBarController: UIViewController {
         let button = UIButton(type: .custom)
         button.setImage(UIImage(named: "More"), for: .normal)
         button.setTitle("More", for: .normal)
-        button.setTitleColor(.white, for: .normal)
-        button.setTitleColor(.systemBlue, for: .selected)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 10)
+        // Цвет текста будет установлен через UIButton.Configuration
         button.imageView?.contentMode = .scaleAspectFit
         button.tintColor = .white
         return button
@@ -136,11 +129,11 @@ class MainTabBarController: UIViewController {
         
         customTabBar.snp.makeConstraints { make in
             make.leading.trailing.bottom.equalToSuperview()
-            make.height.equalTo(90) // Включая safe area
+            make.height.equalTo(80) // Стандартная высота для всех кнопок
         }
         
         tabStackView.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(10)
+            make.top.equalToSuperview().offset(0) // Убираем верхний отступ для подъема кнопок
             make.leading.trailing.equalToSuperview().inset(20)
             make.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).offset(-10)
         }
@@ -150,21 +143,56 @@ class MainTabBarController: UIViewController {
     }
     
     private func setupTabButtons() {
-        // Настраиваем внешний вид кнопок
+        // Настраиваем обычные кнопки
         let normalButtons = [homeButton, templatesButton, projectsButton, moreButton]
-        
+
         for button in normalButtons {
-            button.titleEdgeInsets = UIEdgeInsets(top: 0, left: -(button.imageView?.frame.width ?? 0), bottom: -20, right: 0)
-            button.imageEdgeInsets = UIEdgeInsets(top: -15, left: 0, bottom: 0, right: -(button.titleLabel?.frame.width ?? 0))
+            // Используем прозрачную конфигурацию без фона
+            var configuration = UIButton.Configuration.plain()
+            configuration.imagePlacement = .top
+            configuration.imagePadding = 4
+            configuration.titleAlignment = .center
+            configuration.baseForegroundColor = .white // Цвет текста
+            configuration.background.backgroundColor = .clear
+            configuration.background.strokeWidth = 0
+
+            // Устанавливаем конфигурацию
+            button.configuration = configuration
+
             
+
+            // Убираем любые фоны и границы
+            button.backgroundColor = .clear
+            button.layer.borderWidth = 0
+            button.layer.borderColor = UIColor.clear.cgColor
+
+            // Настраиваем размеры для обычных кнопок
             button.snp.makeConstraints { make in
-                make.height.equalTo(50)
+                make.height.equalTo(60) // Стандартная высота для обычных кнопок
             }
         }
-        
-        // Центральная кнопка Create больше
+
+        // Центральная кнопка Create - только изображение без текста
+        var createConfiguration = UIButton.Configuration.plain()
+        createConfiguration.imagePlacement = .top
+        createConfiguration.imagePadding = 0
+        createConfiguration.titleAlignment = .center
+        createConfiguration.background.backgroundColor = .clear
+        createConfiguration.background.strokeWidth = 0
+
+        // Убираем текст с центральной кнопки
+        createButton.setTitle("", for: .normal)
+        createButton.configuration = createConfiguration
+
+        // Убираем любые фоны и границы
+        createButton.backgroundColor = .clear
+        createButton.layer.borderWidth = 0
+        createButton.layer.borderColor = UIColor.clear.cgColor
+        createButton.layer.cornerRadius = 0
+
         createButton.snp.makeConstraints { make in
-            make.size.equalTo(50)
+            make.height.equalTo(60) // Стандартная высота
+            make.top.equalToSuperview().offset(-30) // Поднимаем кнопку на 30 пикселей выше
         }
     }
     
@@ -272,10 +300,7 @@ class MainTabBarController: UIViewController {
         let galleryViewController = GalleryViewController(viewModel: galleryViewModel)
         
         // Устанавливаем координатор для навигации
-        if let mainCoordinator = coordinator {
-            // Используем тот же координатор для совместимости
-            galleryViewController.coordinator = mainCoordinator as? HomeTabBarCoordinator
-        }
+        galleryViewController.coordinator = coordinator
         
         return galleryViewController
     }
@@ -375,7 +400,7 @@ class MainTabBarController: UIViewController {
         
         let iconImageView = UIImageView()
         iconImageView.image = UIImage(systemName: icon)
-        iconImageView.tintColor = .systemBlue
+        iconImageView.tintColor = .white
         iconImageView.contentMode = .scaleAspectFit
         headerView.addSubview(iconImageView)
         
@@ -593,7 +618,7 @@ class MainTabBarController: UIViewController {
         
         let titleLabel = UILabel()
         titleLabel.text = title
-        titleLabel.font = UIFont.systemFont(ofSize: 16, weight: isPremium ? .semibold : .regular)
+        titleLabel.font = UIFont.systemFont(ofSize: 16, weight: isPremium ? .medium : .regular)
         titleLabel.textColor = isPremium ? .systemOrange : .label
         itemView.addSubview(titleLabel)
         
@@ -651,17 +676,47 @@ class MainTabBarController: UIViewController {
     }
     
     private func updateTabButtonStates() {
-        let buttons = [homeButton, templatesButton, projectsButton, moreButton]
-        
+        let buttons = [homeButton, templatesButton, createButton, projectsButton, moreButton]
+
         for (index, button) in buttons.enumerated() {
             let isSelected = (index == selectedTabIndex)
             button.isSelected = isSelected
-            button.tintColor = isSelected ? .systemBlue : .white
+
+            if isSelected {
+                // Активная вкладка - обычный белый цвет
+                button.configuration?.baseForegroundColor = .white
+                button.alpha = 1.0
+            } else {
+                // Неактивная вкладка - серый цвет с пониженной прозрачностью
+                button.configuration?.baseForegroundColor = .gray
+                button.alpha = 0.6
+            }
+
+            // Устанавливаем размер шрифта (точный размер 12.0)
+            let tabFont = UIFont.systemFont(ofSize: 10.0) // Точный размер для таб-бара
+
+            // Применяем настройки текста
+            if let title = button.title(for: .normal), !title.isEmpty {
+                let currentColor = button.configuration?.baseForegroundColor ?? .white
+                let attributedString = NSAttributedString(
+                    string: title,
+                    attributes: [
+                        .font: tabFont,
+                        .kern: -0.5, // Уменьшаем расстояние между буквами
+                        .foregroundColor: currentColor
+                    ]
+                )
+                button.setAttributedTitle(attributedString, for: .normal)
+
+                // Применяем настройки к titleLabel напрямую
+                button.titleLabel?.attributedText = attributedString
+                button.titleLabel?.numberOfLines = 1
+                button.titleLabel?.lineBreakMode = .byTruncatingTail
+            }
         }
-        
-        // Обновляем состояние центральной кнопки Create
-        let isCreateSelected = (selectedTabIndex == 2)
-        createButton.backgroundColor = isCreateSelected ? .systemBlue : .systemPurple
+
+        // Центральная кнопка Create не имеет специального фона
+        createButton.backgroundColor = .clear
     }
     
     // MARK: - Subscription Actions

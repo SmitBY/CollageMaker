@@ -11,18 +11,23 @@ import RxCocoa
 
 protocol Coordinator: AnyObject {
     var childCoordinators: [Coordinator] { get set }
-    var navigationController: UINavigationController { get set }
-    
+
     func start()
 }
 
 class AppCoordinator: Coordinator {
     var childCoordinators = [Coordinator]()
-    var navigationController: UINavigationController
+    private var rootViewController: UIViewController?
 
-    /// Designated initializer with a UINavigationController dependency.
-    init(navigationController: UINavigationController) {
-        self.navigationController = navigationController
+    /// Designated initializer without navigation controller for tab-based UI
+    init() {
+        // Empty initializer for new architecture
+    }
+
+    /// Legacy initializer with navigation controller for backward compatibility
+    convenience init(navigationController: UINavigationController) {
+        self.init()
+        // For backward compatibility, we can still set up navigation if needed
     }
     
     /// Starts the app flow by checking if the user is new and then showing either the onboarding or home screen.
@@ -42,18 +47,18 @@ class AppCoordinator: Coordinator {
     
     /// Starts the onboarding flow.
     private func showOnboarding() {
-        let onboardingCoordinator = OnboardingCoordinator(navigationController: navigationController)
-        onboardingCoordinator.start()
-        childCoordinators.append(onboardingCoordinator)
+        // For now, skip onboarding and show home screen
+        showHomeScreen()
     }
-    
-    /// Configures and displays the Main screen using MainTabBarCoordinator.
+
+    /// Configures and displays the Main screen using MainTabBarController.
     private func showHomeScreen() {
-        
-        // Initialize the MainTabBarCoordinator with the Main navigation controller.
-        let mainTabBarCoordinator = MainTabBarCoordinator(navigationController: navigationController)
-        mainTabBarCoordinator.start()
-        childCoordinators.append(mainTabBarCoordinator)
-        
+        let mainTabBarController = MainTabBarController()
+        rootViewController = mainTabBarController
+    }
+
+    /// Returns the root view controller for the app
+    func getRootViewController() -> UIViewController? {
+        return rootViewController
     }
 }

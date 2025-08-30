@@ -5,13 +5,6 @@
 //  Created by Vasili krasnoyski on 31.01.2025.
 //
 
-//
-//  CollageEditorViewModel.swift
-//  CollageMaker
-//
-//  Created by Vasili krasnoyski on 31.01.2025.
-//
-
 import Foundation
 import RxSwift
 import RxCocoa

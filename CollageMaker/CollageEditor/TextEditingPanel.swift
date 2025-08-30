@@ -13,6 +13,8 @@ protocol TextEditingPanelDelegate: AnyObject {
     func textEditingPanel(_ panel: TextEditingPanel, didSelectColor color: UIColor)
     func textEditingPanel(_ panel: TextEditingPanel, didSelectFontSize size: CGFloat)
     func textEditingPanel(_ panel: TextEditingPanel, didSelectFont fontName: String)
+    func textEditingPanel(_ panel: TextEditingPanel, didChangeTextAdaptation enabled: Bool)
+    func textEditingPanel(_ panel: TextEditingPanel, didChangeTextAlignment alignment: NSTextAlignment)
     func textEditingPanelDidFinish(_ panel: TextEditingPanel)
 }
 
@@ -67,7 +69,57 @@ class TextEditingPanel: UIView {
         label.font = UIFont.systemFont(ofSize: 14)
         return label
     }()
-    
+
+    private let textAdaptationSwitch: UISwitch = {
+        let switchControl = UISwitch()
+        switchControl.isOn = true
+        return switchControl
+    }()
+
+    private let textAdaptationLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Автоадаптация текста"
+        label.font = UIFont.systemFont(ofSize: 14)
+        return label
+    }()
+
+    // Кнопки выравнивания текста
+    private let alignmentStackView: UIStackView = {
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.distribution = .fillEqually
+        stack.spacing = 8
+        return stack
+    }()
+
+    private let leftAlignButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("⬅️", for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 16)
+        button.backgroundColor = .systemGray5
+        button.layer.cornerRadius = 8
+        return button
+    }()
+
+    private let centerAlignButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("⬌", for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 16)
+        button.backgroundColor = .systemBlue
+        button.setTitleColor(.white, for: .normal)
+        button.layer.cornerRadius = 8
+        return button
+    }()
+
+    private let rightAlignButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("➡️", for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 16)
+        button.backgroundColor = .systemGray5
+        button.layer.cornerRadius = 8
+        return button
+    }()
+
     private let fontPickerButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Шрифт: Системный", for: .normal)
@@ -104,7 +156,8 @@ class TextEditingPanel: UIView {
     ]
     
     private var selectedFontName = "System"
-    
+    private var currentTextAlignment: NSTextAlignment = .center
+
     private let doneButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Готово", for: .normal)
@@ -149,8 +202,16 @@ class TextEditingPanel: UIView {
         containerView.addSubview(colorStackView)
         containerView.addSubview(fontSizeLabel)
         containerView.addSubview(fontSizeSlider)
+        containerView.addSubview(textAdaptationLabel)
+        containerView.addSubview(textAdaptationSwitch)
+        containerView.addSubview(alignmentStackView)
         containerView.addSubview(fontPickerButton)
         containerView.addSubview(doneButton)
+
+        // Добавляем кнопки выравнивания в стек
+        alignmentStackView.addArrangedSubview(leftAlignButton)
+        alignmentStackView.addArrangedSubview(centerAlignButton)
+        alignmentStackView.addArrangedSubview(rightAlignButton)
         
         // Constraints
         containerView.snp.makeConstraints { make in
@@ -179,9 +240,25 @@ class TextEditingPanel: UIView {
             make.leading.equalTo(fontSizeLabel.snp.trailing).offset(16)
             make.trailing.equalToSuperview().inset(16)
         }
-        
-        fontPickerButton.snp.makeConstraints { make in
+
+        textAdaptationLabel.snp.makeConstraints { make in
             make.top.equalTo(fontSizeSlider.snp.bottom).offset(16)
+            make.leading.equalToSuperview().inset(16)
+        }
+
+                textAdaptationSwitch.snp.makeConstraints { make in
+            make.centerY.equalTo(textAdaptationLabel)
+            make.trailing.equalToSuperview().inset(16)
+        }
+
+        alignmentStackView.snp.makeConstraints { make in
+            make.top.equalTo(textAdaptationSwitch.snp.bottom).offset(16)
+            make.leading.trailing.equalToSuperview().inset(16)
+            make.height.equalTo(40)
+        }
+
+        fontPickerButton.snp.makeConstraints { make in
+            make.top.equalTo(alignmentStackView.snp.bottom).offset(16)
             make.leading.trailing.equalToSuperview().inset(16)
             make.height.equalTo(40)
         }
@@ -216,6 +293,10 @@ class TextEditingPanel: UIView {
     private func setupActions() {
         textField.addTarget(self, action: #selector(textFieldChanged), for: .editingChanged)
         fontSizeSlider.addTarget(self, action: #selector(fontSizeChanged), for: .valueChanged)
+        textAdaptationSwitch.addTarget(self, action: #selector(textAdaptationChanged), for: .valueChanged)
+        leftAlignButton.addTarget(self, action: #selector(alignmentButtonTapped(_:)), for: .touchUpInside)
+        centerAlignButton.addTarget(self, action: #selector(alignmentButtonTapped(_:)), for: .touchUpInside)
+        rightAlignButton.addTarget(self, action: #selector(alignmentButtonTapped(_:)), for: .touchUpInside)
         fontPickerButton.addTarget(self, action: #selector(fontPickerTapped), for: .touchUpInside)
         doneButton.addTarget(self, action: #selector(doneButtonTapped), for: .touchUpInside)
         
@@ -262,6 +343,53 @@ class TextEditingPanel: UIView {
         delegate?.textEditingPanel(self, didSelectFontSize: CGFloat(size))
     }
     
+    @objc private func textAdaptationChanged() {
+        delegate?.textEditingPanel(self, didChangeTextAdaptation: textAdaptationSwitch.isOn)
+    }
+
+    @objc private func alignmentButtonTapped(_ sender: UIButton) {
+        var newAlignment: NSTextAlignment = .left
+
+        if sender == leftAlignButton {
+            newAlignment = .left
+        } else if sender == centerAlignButton {
+            newAlignment = .center
+        } else if sender == rightAlignButton {
+            newAlignment = .right
+        }
+
+        currentTextAlignment = newAlignment
+        updateAlignmentButtonAppearance()
+        delegate?.textEditingPanel(self, didChangeTextAlignment: newAlignment)
+    }
+
+    private func updateAlignmentButtonAppearance() {
+        // Сбрасываем все кнопки к неактивному состоянию
+        leftAlignButton.backgroundColor = .systemGray5
+        leftAlignButton.setTitleColor(.label, for: .normal)
+
+        centerAlignButton.backgroundColor = .systemGray5
+        centerAlignButton.setTitleColor(.label, for: .normal)
+
+        rightAlignButton.backgroundColor = .systemGray5
+        rightAlignButton.setTitleColor(.label, for: .normal)
+
+        // Выделяем активную кнопку
+        switch currentTextAlignment {
+        case .left:
+            leftAlignButton.backgroundColor = .systemBlue
+            leftAlignButton.setTitleColor(.white, for: .normal)
+        case .center:
+            centerAlignButton.backgroundColor = .systemBlue
+            centerAlignButton.setTitleColor(.white, for: .normal)
+        case .right:
+            rightAlignButton.backgroundColor = .systemBlue
+            rightAlignButton.setTitleColor(.white, for: .normal)
+        default:
+            break
+        }
+    }
+
     @objc private func fontPickerTapped() {
         showFontPicker()
     }
@@ -327,10 +455,13 @@ class TextEditingPanel: UIView {
     
     // MARK: - Public Methods
     
-    func show(with text: String = "") {
+    func show(with text: String = "", textAdaptationEnabled: Bool = true, textAlignment: NSTextAlignment = .center) {
         textField.text = text
+        textAdaptationSwitch.isOn = textAdaptationEnabled
+        currentTextAlignment = textAlignment
+        updateAlignmentButtonAppearance()
         textField.becomeFirstResponder()
-        
+
         alpha = 0
         UIView.animate(withDuration: 0.3) {
             self.alpha = 1

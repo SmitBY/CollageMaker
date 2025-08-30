@@ -459,34 +459,39 @@ class CollageEditorViewController: UIViewController {
         view.bringSubviewToFront(addStickerButton)
         view.bringSubviewToFront(changeBackgroundButton)
         view.bringSubviewToFront(addImageButton)
-        
+
+        // Если есть TextEditingPanel, она должна быть самой верхней
+        if let textPanel = textEditingPanel {
+            view.bringSubviewToFront(textPanel)
+        }
+
         // Добавляем тень для лучшей видимости
         saveButton.layer.shadowColor = UIColor.black.cgColor
         saveButton.layer.shadowOffset = CGSize(width: 0, height: 2)
         saveButton.layer.shadowOpacity = 0.3
         saveButton.layer.shadowRadius = 4
-        
+
         addTextButton.layer.shadowColor = UIColor.black.cgColor
         addTextButton.layer.shadowOffset = CGSize(width: 0, height: 2)
         addTextButton.layer.shadowOpacity = 0.3
         addTextButton.layer.shadowRadius = 4
-        
+
         addStickerButton.layer.shadowColor = UIColor.black.cgColor
         addStickerButton.layer.shadowOffset = CGSize(width: 0, height: 2)
         addStickerButton.layer.shadowOpacity = 0.3
         addStickerButton.layer.shadowRadius = 4
-        
+
         changeBackgroundButton.layer.shadowColor = UIColor.black.cgColor
         changeBackgroundButton.layer.shadowOffset = CGSize(width: 0, height: 2)
         changeBackgroundButton.layer.shadowOpacity = 0.3
         changeBackgroundButton.layer.shadowRadius = 4
-        
+
         addImageButton.rx.tap
             .subscribe(onNext: { [weak self] in
                 self?.showImagePickerWithFrameSelection()
             })
             .disposed(by: disposeBag)
-        
+
         slidersContainerView.layer.shadowColor = UIColor.black.cgColor
         slidersContainerView.layer.shadowOffset = CGSize(width: 0, height: 2)
         slidersContainerView.layer.shadowOpacity = 0.1
@@ -577,13 +582,7 @@ class CollageEditorViewController: UIViewController {
     }
     
     @objc private func backButtonTapped() {
-        if let mainCoordinator = coordinator as? MainTabBarCoordinator {
-            mainCoordinator.returnToMain()
-        } else if let homeCoordinator = coordinator as? HomeTabBarCoordinator {
-            navigationController?.popViewController(animated: true)
-        } else {
-            navigationController?.popViewController(animated: true)
-        }
+        navigationController?.popViewController(animated: true)
     }
     
     // MARK: - Creative Template Styling
@@ -1037,18 +1036,43 @@ class CollageEditorViewController: UIViewController {
     // MARK: - Text Layers
     
     private func addTextLayer() {
-        // Размещаем текстовый слой в центре квадратной области
-        let centerX = collageView.bounds.width / 2 - 100
-        let centerY = collageView.bounds.height / 2 - 25
-        
-        let textLayer = TextLayerView(frame: CGRect(x: centerX, y: centerY, width: 200, height: 50))
+        // Создаем текстовый слой с адаптивными размерами
+        let textLayer = TextLayerView()
+
+        // Настраиваем адаптацию текста
+        textLayer.configureTextAdaptation(
+            minFontSize: 12,
+            maxFontSize: 48,
+            adjustsFontSize: true,
+            enablesWrapping: true
+        )
+
+        // Устанавливаем ограничения на основе размера коллажа
+        let collageSize = collageView.bounds.size
+        let maxTextWidth = min(collageSize.width * 0.8, 300) // Максимум 80% ширины коллажа или 300pt
+        let maxTextHeight = min(collageSize.height * 0.6, 200) // Максимум 60% высоты коллажа или 200pt
+
+        textLayer.updateTextConstraints(maxWidth: maxTextWidth, maxHeight: maxTextHeight)
+
+        // Получаем адаптированный размер после настройки
+        let adaptedSize = textLayer.adaptiveTextView.getAdaptedSize()
+        let finalWidth = max(adaptedSize.width, 100) // Минимальная ширина
+        let finalHeight = max(adaptedSize.height, 40) // Минимальная высота
+
+        // Размещаем ближе к левому краю выше по экрану (примерно 1/4 от верха)
+        let leftMargin: CGFloat = 30 // Отступ от левого края
+        let centerX = leftMargin
+        let centerY = collageView.bounds.height / 4 - finalHeight / 2
+
+        textLayer.frame = CGRect(x: centerX, y: centerY, width: finalWidth, height: finalHeight)
+
         textLayer.onDelete = { [weak self] in
             self?.removeTextLayer(textLayer)
         }
         textLayer.onTap = { [weak self] in
             self?.selectTextLayer(textLayer)
         }
-        
+
         collageView.addSubview(textLayer)
         textLayers.append(textLayer)
         selectTextLayer(textLayer)
@@ -1156,23 +1180,32 @@ class CollageEditorViewController: UIViewController {
     
     private func showTextEditingPanel(for textLayer: TextLayerView) {
         hideTextEditingPanel()
-        
+
         let panel = TextEditingPanel()
         panel.delegate = self
         view.addSubview(panel)
-        
+
         // Панель занимает весь экран для правильного позиционирования относительно клавиатуры
         panel.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
-        
-        panel.show(with: textLayer.archTextView.text)
+
+        let adaptationEnabled = textLayer.adaptiveTextView.adjustsFontSizeToFitWidth
+        let currentAlignment = getCurrentTextAlignment(for: textLayer)
+        panel.show(with: textLayer.archTextView.text, textAdaptationEnabled: adaptationEnabled, textAlignment: currentAlignment)
         textEditingPanel = panel
-        
+
+        // TextEditingPanel должна быть самой верхней, поэтому перемещаем её на передний план
+        view.bringSubviewToFront(panel)
+
         // Убеждаемся, что кнопки остаются доступными после добавления панели
         ensureButtonsOnTop()
     }
-    
+
+    private func getCurrentTextAlignment(for textLayer: TextLayerView) -> NSTextAlignment {
+        return textLayer.getTextAlignment()
+    }
+
     private func hideTextEditingPanel() {
         textEditingPanel?.hide()
         textEditingPanel = nil
@@ -1423,11 +1456,8 @@ class CollageEditorViewController: UIViewController {
         )
         
         alert.addAction(UIAlertAction(title: "Перейти в галерею", style: .default) { [weak self] _ in
-            if let mainCoordinator = self?.coordinator as? MainTabBarCoordinator {
-                mainCoordinator.showGallery()
-            } else if let homeCoordinator = self?.coordinator as? HomeTabBarCoordinator {
-                homeCoordinator.showGallery()
-            }
+            // Gallery navigation not implemented in current coordinator
+            self?.navigationController?.popToRootViewController(animated: true)
         })
         
         alert.addAction(UIAlertAction(title: "OK", style: .cancel))
@@ -1736,12 +1766,27 @@ extension CollageEditorViewController: TextEditingPanelDelegate {
         }
     }
     
-    func textEditingPanel(_ panel: TextEditingPanel, didSelectFont fontName: String) {
+        func textEditingPanel(_ panel: TextEditingPanel, didSelectFont fontName: String) {
         currentTextLayer?.updateFontByName(fontName)
     }
-    
 
-    
+    func textEditingPanel(_ panel: TextEditingPanel, didChangeTextAdaptation enabled: Bool) {
+        if let textLayer = currentTextLayer {
+            textLayer.configureTextAdaptation(
+                adjustsFontSize: enabled,
+                enablesWrapping: enabled
+            )
+            // Если адаптация включена, сразу применяем её к текущему тексту
+            if enabled {
+                textLayer.adaptiveTextView.updateText(textLayer.adaptiveTextView.text)
+            }
+        }
+    }
+
+    func textEditingPanel(_ panel: TextEditingPanel, didChangeTextAlignment alignment: NSTextAlignment) {
+        currentTextLayer?.setAdaptiveTextAlignment(alignment)
+    }
+
     func textEditingPanelDidFinish(_ panel: TextEditingPanel) {
         hideTextEditingPanel()
         currentTextLayer?.setSelected(false)
@@ -2188,14 +2233,14 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
         
         print("🎨 Открываем PhotoEditor для редактирования изображения")
         
-        if let mainCoordinator = coordinator as? MainTabBarCoordinator {
-            mainCoordinator.showPhotoEditor(with: image) { [weak self, weak imageView] editedImage in
-                self?.handleEditedImage(editedImage, for: imageView)
-            }
-        } else if let homeCoordinator = coordinator as? HomeTabBarCoordinator {
-            homeCoordinator.showPhotoEditor(with: image) { [weak self, weak imageView] editedImage in
-                self?.handleEditedImage(editedImage, for: imageView)
-            }
+        if let homeCoordinator = coordinator as? HomeViewCoordinator {
+            homeCoordinator.showPhotoEditor(with: image)
+        } else {
+            // Fallback: show photo editor directly if no coordinator available
+            let photoEditorViewModel = PhotoEditorViewModel(image: image)
+            let photoEditorVC = PhotoEditorViewController(viewModel: photoEditorViewModel)
+            photoEditorVC.modalPresentationStyle = .overFullScreen
+            navigationController?.present(photoEditorVC, animated: true)
         }
     }
     

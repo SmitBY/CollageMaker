@@ -15,27 +15,20 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = (scene as? UIWindowScene) else { return }
         
         window = UIWindow(windowScene: windowScene)
-        
-        let navigationController = UINavigationController()
-        appCoordinator = AppCoordinator(navigationController: navigationController)
+
+        // Создаем AppCoordinator без navigation controller, так как MainTabBarController сам управляет UI
+        appCoordinator = AppCoordinator()
         appCoordinator?.start()
-        
-        // Глобальная темная тема и оформление навигации
+
+        // Глобальная темная тема
         if #available(iOS 13.0, *) {
             window?.overrideUserInterfaceStyle = .dark
         }
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = .black
-        appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-        navigationController.navigationBar.standardAppearance = appearance
-        navigationController.navigationBar.scrollEdgeAppearance = appearance
-        navigationController.navigationBar.compactAppearance = appearance
-        navigationController.navigationBar.tintColor = .white
-        navigationController.navigationBar.barStyle = .black
-        
-        window?.rootViewController = navigationController
+
+        // Настраиваем root view controller через coordinator
+        if let rootVC = appCoordinator?.getRootViewController() {
+            window?.rootViewController = rootVC
+        }
         window?.makeKeyAndVisible()
     }
 }

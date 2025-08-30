@@ -94,7 +94,7 @@ class GalleryViewController: UIViewController {
     var viewModel: GalleryViewModel!
     let disposeBag = DisposeBag()
     
-    weak var coordinator: HomeTabBarCoordinator?
+    weak var coordinator: (any Coordinator)?
     
     private lazy var collectionView: UICollectionView = {
         let layout = UICollectionViewFlowLayout()

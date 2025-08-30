@@ -30,12 +30,13 @@ class MainViewController: UIViewController {
     
     private let premiumButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("TRY PREMIUM", for: .normal)
-        button.setTitleColor(.white, for: .normal)
-        button.titleLabel?.font = UIFont.boldSystemFont(ofSize: 12)
-        button.backgroundColor = UIColor.black
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = "TRY PREMIUM"
+        configuration.baseForegroundColor = .white
+        configuration.baseBackgroundColor = .black
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)
+        button.configuration = configuration
         button.layer.cornerRadius = 12
-        button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
         return button
     }()
 
@@ -93,13 +94,13 @@ class MainViewController: UIViewController {
 
     private let seeMoreButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("See More", for: .normal)
-        button.setTitleColor(.white, for: .normal)
-        button.titleLabel?.font = UIFont.boldSystemFont(ofSize: 14)
-        button.backgroundColor = .black
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = "See More"
+        configuration.baseForegroundColor = .white
+        configuration.baseBackgroundColor = .black
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 36)
+        button.configuration = configuration
         button.layer.cornerRadius = 12
-        button.contentHorizontalAlignment = .left
-        button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 36)
         return button
     }()
 
@@ -160,7 +161,7 @@ class MainViewController: UIViewController {
     
     // MARK: - Properties
     
-    weak var coordinator: MainTabBarCoordinator?
+    weak var coordinator: (any Coordinator)?
     
     // MARK: - Lifecycle
     
@@ -209,7 +210,9 @@ class MainViewController: UIViewController {
         }
         
         templatesLabel.snp.makeConstraints { make in
-            make.centerX.centerY.equalToSuperview()
+            make.centerX.equalToSuperview()
+            // Позиционируем на 76.8% высоты экрана (671/874 = 0.768)
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(view.frame.height * 0.768)
         }
         
         bannerContainerView.snp.makeConstraints { make in

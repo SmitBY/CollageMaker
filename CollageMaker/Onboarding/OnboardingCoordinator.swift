@@ -9,13 +9,17 @@ import UIKit
 
 class OnboardingCoordinator: Coordinator {
     var childCoordinators = [Coordinator]()
-    var navigationController: UINavigationController
-    
+    private var navigationController: UINavigationController?
+
     init(navigationController: UINavigationController) {
         self.navigationController = navigationController
     }
-    
+
     func start() {
+        guard let navigationController = navigationController else {
+            print("OnboardingCoordinator: No navigation controller provided")
+            return
+        }
         let onboardingVC = OnboardingViewController(viewModel: OnboardingViewModel())
         navigationController.pushViewController(onboardingVC, animated: true)
     }

@@ -11,22 +11,34 @@ import SnapKit
 class TextLayerView: UIView {
     
     // MARK: - Properties
-    
-    let archTextView: ArchTextView = {
-        let view = ArchTextView()
+
+    let adaptiveTextView: AdaptiveTextView = {
+        let view = AdaptiveTextView()
         view.text = "Введите текст"
         view.font = UIFont.systemFont(ofSize: 24)
         view.textColor = .black
         view.isUserInteractionEnabled = true
+        // Настройки адаптации текста
+        view.adjustsFontSizeToFitWidth = true
+        view.enablesWordWrapping = true
+        view.minimumFontSize = 12
+        view.maximumFontSize = 72
+        view.maxWidth = 180 // Учитываем отступы
+        view.maxHeight = 180
         return view
     }()
-    
+
+    // Для совместимости с существующим кодом
+    var archTextView: ArchTextView {
+        return adaptiveTextView
+    }
+
     // Для совместимости с существующим кодом
     var textLabel: UILabel {
         let label = UILabel()
-        label.text = archTextView.text
-        label.font = archTextView.font
-        label.textColor = archTextView.textColor
+        label.text = adaptiveTextView.text
+        label.font = adaptiveTextView.font
+        label.textColor = adaptiveTextView.textColor
         return label
     }
     
@@ -101,7 +113,8 @@ class TextLayerView: UIView {
     private var gestureBeganCenter: CGPoint = .zero
     private var currentScale: CGFloat = 1.0
     private var currentRotation: CGFloat = 0.0
-    
+    private var currentTextAlignment: NSTextAlignment = .center
+
     // Состояние жестов для защиты от отмены
     private var lastValidTransform: CGAffineTransform = .identity
     private var lastGestureTransform: CGAffineTransform = .identity // Сохраняем последний жест отдельно
@@ -128,14 +141,19 @@ class TextLayerView: UIView {
     
     private func setupUI() {
         backgroundColor = .clear
-        
-        addSubview(archTextView)
+
+        addSubview(adaptiveTextView)
         addSubview(deleteButton)
         addSubview(scaleControlButton)
         addSubview(rotationControlButton)
         addSubview(scaleIndicator)
-        
-        archTextView.snp.makeConstraints { make in
+
+        // Настраиваем callback для изменения размера
+        adaptiveTextView.onSizeChanged = { [weak self] newSize in
+            self?.handleTextSizeChanged(newSize)
+        }
+
+        adaptiveTextView.snp.makeConstraints { make in
             make.edges.equalToSuperview().inset(8)
         }
         
@@ -629,26 +647,96 @@ class TextLayerView: UIView {
     }
     
     func updateText(_ text: String) {
-        archTextView.updateText(text)
+        adaptiveTextView.updateText(text)
     }
-    
+
     func updateTextColor(_ color: UIColor) {
-        archTextView.updateTextColor(color)
+        adaptiveTextView.updateTextColor(color)
     }
-    
+
     func updateFont(_ font: UIFont) {
-        archTextView.updateFont(font)
+        adaptiveTextView.updateFont(font)
     }
-    
+
     func updateFontByName(_ fontName: String) {
-        let currentSize = archTextView.font.pointSize
+        let currentSize = adaptiveTextView.font.pointSize
         if let newFont = UIFont(name: fontName, size: currentSize) {
-            archTextView.updateFont(newFont)
+            adaptiveTextView.updateFont(newFont)
         }
     }
-    
+
     func applyArchEffect(intensity: CGFloat) {
-        archTextView.updateArchIntensity(intensity)
+        adaptiveTextView.updateArchIntensity(intensity)
+    }
+
+    // MARK: - Adaptive Text Methods
+
+    /// Обработчик изменения размера текста
+    private func handleTextSizeChanged(_ newSize: CGSize) {
+        // Автоматически обновляем размер контейнера с учетом отступов
+        let containerWidth = max(newSize.width, 50)  // Минимальная ширина
+        let containerHeight = max(newSize.height, 30) // Минимальная высота
+
+        // Обновляем размеры с анимацией
+        UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut) {
+            self.frame.size = CGSize(width: containerWidth, height: containerHeight)
+            // Принудительно обновляем отображение текста
+            self.adaptiveTextView.setNeedsDisplay()
+            self.layoutIfNeeded()
+        } completion: { _ in
+            // После завершения анимации еще раз обновляем отображение
+            self.adaptiveTextView.setNeedsDisplay()
+        }
+    }
+
+    /// Настроить параметры адаптации текста
+    func configureTextAdaptation(minFontSize: CGFloat? = nil, maxFontSize: CGFloat? = nil,
+                               adjustsFontSize: Bool? = nil, enablesWrapping: Bool? = nil) {
+        if let minSize = minFontSize {
+            adaptiveTextView.minimumFontSize = minSize
+        }
+        if let maxSize = maxFontSize {
+            adaptiveTextView.maximumFontSize = maxSize
+        }
+        if let adjusts = adjustsFontSize {
+            adaptiveTextView.adjustsFontSizeToFitWidth = adjusts
+        }
+        if let wrapping = enablesWrapping {
+            adaptiveTextView.enablesWordWrapping = wrapping
+        }
+    }
+
+    /// Обновить ограничения для текста
+    func updateTextConstraints(maxWidth: CGFloat? = nil, maxHeight: CGFloat? = nil) {
+        if let width = maxWidth {
+            adaptiveTextView.maxWidth = width
+        }
+        if let height = maxHeight {
+            adaptiveTextView.maxHeight = height
+        }
+    }
+
+    /// Сбросить адаптацию текста
+    func resetTextAdaptation() {
+        adaptiveTextView.resetAdaptation()
+    }
+
+    /// Установить выравнивание текста
+    func setTextAlignment(_ alignment: NSTextAlignment) {
+        currentTextAlignment = alignment
+        // При необходимости можно обновить отображение текста здесь
+        setNeedsDisplay()
+    }
+
+    /// Получить текущее выравнивание текста
+    func getTextAlignment() -> NSTextAlignment {
+        return currentTextAlignment
+    }
+
+    /// Установить выравнивание текста для адаптивного текста
+    func setAdaptiveTextAlignment(_ alignment: NSTextAlignment) {
+        currentTextAlignment = alignment
+        adaptiveTextView.textAlignment = alignment
     }
     
     // MARK: - External Transform Controls
