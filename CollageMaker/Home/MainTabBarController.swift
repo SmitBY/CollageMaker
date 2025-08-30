@@ -159,8 +159,6 @@ class MainTabBarController: UIViewController {
             // Устанавливаем конфигурацию
             button.configuration = configuration
 
-            
-
             // Убираем любые фоны и границы
             button.backgroundColor = .clear
             button.layer.borderWidth = 0
@@ -311,7 +309,7 @@ class MainTabBarController: UIViewController {
         let homeVC = HomeViewController(viewModel: homeVM)
         
         // Создаем специальный wrapper coordinator для навигации из HomeViewController
-        if let mainCoordinator = coordinator {
+        if coordinator != nil {
             // Используем существующий координатор для навигации
             // HomeViewController будет использовать openCollageEditor для перехода к редактору
         }
