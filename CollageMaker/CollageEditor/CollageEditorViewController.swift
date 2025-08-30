@@ -127,7 +127,7 @@ extension UserDefaults {
 /// It is initialized with a CollageEditorViewModel.
 class CollageEditorViewController: UIViewController {
     
-    weak var coordinator: (any Coordinator)?
+    weak var coordinator: MainViewCoordinator?
     
     // MARK: - Properties
     
@@ -582,7 +582,13 @@ class CollageEditorViewController: UIViewController {
     }
     
     @objc private func backButtonTapped() {
-        navigationController?.popViewController(animated: true)
+        // Если контроллер показывается модально (как в нашем случае через MainViewCoordinator)
+        if presentingViewController != nil {
+            dismiss(animated: true, completion: nil)
+        } else {
+            // Альтернативный вариант для случаев, когда есть navigationController
+            navigationController?.popViewController(animated: true)
+        }
     }
     
     // MARK: - Creative Template Styling
@@ -1454,14 +1460,24 @@ class CollageEditorViewController: UIViewController {
             message: "Ваш коллаж сохранен в галерею и фотоальбом",
             preferredStyle: .alert
         )
-        
+
         alert.addAction(UIAlertAction(title: "Перейти в галерею", style: .default) { [weak self] _ in
-            // Gallery navigation not implemented in current coordinator
-            self?.navigationController?.popToRootViewController(animated: true)
+            guard let self = self else { return }
+
+            // Сначала закрываем модальный редактор
+            if self.presentingViewController != nil {
+                self.dismiss(animated: true) {
+                    // После закрытия редактора переходим в галерею через координатор
+                    self.coordinator?.showGallery()
+                }
+            } else {
+                // Альтернативный вариант для случаев с navigationController
+                self.coordinator?.showGallery()
+            }
         })
-        
+
         alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-        
+
         present(alert, animated: true)
     }
     
@@ -2233,15 +2249,8 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
         
         print("🎨 Открываем PhotoEditor для редактирования изображения")
         
-        if let homeCoordinator = coordinator as? HomeViewCoordinator {
-            homeCoordinator.showPhotoEditor(with: image)
-        } else {
-            // Fallback: show photo editor directly if no coordinator available
-            let photoEditorViewModel = PhotoEditorViewModel(image: image)
-            let photoEditorVC = PhotoEditorViewController(viewModel: photoEditorViewModel)
-            photoEditorVC.modalPresentationStyle = .overFullScreen
-            navigationController?.present(photoEditorVC, animated: true)
-        }
+        // Используем MainViewCoordinator для открытия фоторедактора
+        coordinator.showPhotoEditor(with: image)
     }
     
     private func handleEditedImage(_ editedImage: UIImage?, for imageView: UIImageView?) {

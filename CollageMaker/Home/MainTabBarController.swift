@@ -12,10 +12,29 @@ import RxCocoa
 
 class MainTabBarController: UIViewController {
     
-    // MARK: - Properties
-    
+        // MARK: - Properties
+
     weak var coordinator: (any Coordinator)?
+    private let mainCoordinator: MainViewCoordinator
     private let disposeBag = DisposeBag()
+
+    // MARK: - Initialization
+
+    convenience init() {
+        self.init(nibName: nil, bundle: nil)
+    }
+
+    override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
+        // Создаем coordinator без ссылки на tabBarController
+        self.mainCoordinator = MainViewCoordinator(tabBarController: nil)
+        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
+        // После инициализации устанавливаем ссылку на себя
+        self.mainCoordinator.tabBarController = self
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
     
     // MARK: - UI Elements
     
@@ -307,13 +326,10 @@ class MainTabBarController: UIViewController {
         // Создаем HomeViewController для создания коллажа
         let homeVM = HomeViewModel()
         let homeVC = HomeViewController(viewModel: homeVM)
-        
-        // Создаем специальный wrapper coordinator для навигации из HomeViewController
-        if coordinator != nil {
-            // Используем существующий координатор для навигации
-            // HomeViewController будет использовать openCollageEditor для перехода к редактору
-        }
-        
+
+        // Устанавливаем наш mainCoordinator для навигации из HomeViewController
+        homeVM.coordinator = mainCoordinator
+
         return homeVC
     }
     

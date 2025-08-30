@@ -14,7 +14,7 @@ class PhotoEditorViewController: UIViewController {
     // MARK: - Properties
     let viewModel: PhotoEditorViewModel
     private let disposeBag = DisposeBag()
-    weak var coordinator: HomeViewCoordinator?
+    weak var coordinator: MainViewCoordinator?
     
     /// Callback для возврата отредактированного изображения
     var editingCompletion: ((UIImage?) -> Void)?

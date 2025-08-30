@@ -264,18 +264,23 @@ class HomeViewController: UIViewController {
     private func openCollageEditor(with template: CollageTemplate) {
         // Создаем массив фотографий для редактора
         var photosForEditor = selectedPhotos
-        
+
         // Если выбрано меньше фото чем требует шаблон, добавляем пустые места
         let requiredPhotos = template.positions.count
         while photosForEditor.count < requiredPhotos {
             photosForEditor.append(UIImage()) // Пустое изображение как заглушка
         }
-        
+
         // Используем координатор из view model
-        if let coordinator = viewModel.coordinator {
+        if let coordinator = viewModel.coordinator as? MainViewCoordinator {
             coordinator.showCollageEditor(with: template)
             return
         }
+
+        // Fallback: если координатор не найден, создаем редактор напрямую
+        let editorViewModel = CollageEditorViewModel(template: template)
+        let editorVC = CollageEditorViewController(viewModel: editorViewModel)
+        navigationController?.pushViewController(editorVC, animated: true)
     }
 }
 

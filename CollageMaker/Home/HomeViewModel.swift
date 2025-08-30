@@ -20,7 +20,7 @@ class HomeViewModel {
     
     /// BehaviorRelay holding an array of collage templates.
     let collageTemplates = BehaviorRelay<[CollageTemplate]>(value: [])
-    weak var coordinator: HomeViewCoordinator?
+    weak var coordinator: (any Coordinator)?
     private let disposeBag = DisposeBag()
     
     init() {
