@@ -8,7 +8,7 @@
 import UIKit
 import RxSwift
 
-class HomeViewCoordinator: Coordinator {
+class HomeViewCoordinator: Coordinator, PhotoEditorRouting {
     var childCoordinators: [Coordinator] = []
     var navigationController: UINavigationController
     private let disposeBag = DisposeBag()
@@ -46,11 +46,15 @@ class HomeViewCoordinator: Coordinator {
     }
     
     /// Переход на CollageEditorViewController с выбранным шаблоном.
-    func showCollageEditor(with template: CollageTemplate) {
+    /// - Parameters:
+    ///   - template: выбранный шаблон
+    ///   - selectedPhotos: массив выбранных пользователем изображений
+    func showCollageEditor(with template: CollageTemplate, selectedPhotos: [UIImage] = []) {
         print("[HomeViewCoordinator] Navigating to CollageEditorViewController with template: \(template.name)")
         let editorViewModel = CollageEditorViewModel(template: template)
-        let editorVC = CollageEditorViewController(viewModel: editorViewModel)
-        // Передаем ссылку на координатор, чтобы CollageEditorViewController мог уведомлять его о выборе фото.
+        let editorVC = CollageEditorViewController(viewModel: editorViewModel, selectedPhotos: selectedPhotos)
+        // Передаем координатор для открытия фоторедактора
+        editorVC.coordinator = self
         navigationController.pushViewController(editorVC, animated: true)
     }
     
@@ -58,7 +62,16 @@ class HomeViewCoordinator: Coordinator {
     func showPhotoEditor(with image: UIImage) {
         let photoEditorViewModel = PhotoEditorViewModel(image: image)
         let photoEditorVC = PhotoEditorViewController(viewModel: photoEditorViewModel)
-        photoEditorVC.modalPresentationStyle = .overFullScreen
-        navigationController.present(photoEditorVC, animated: true, completion: nil)
+        let nav = UINavigationController(rootViewController: photoEditorVC)
+        nav.modalPresentationStyle = .fullScreen
+        nav.setNavigationBarHidden(true, animated: false)
+        navigationController.present(nav, animated: true, completion: nil)
+    }
+
+    func showGallery() {
+        // Переход в галерею через push
+        let vm = GalleryViewModel()
+        let vc = GalleryViewController(viewModel: vm)
+        navigationController.pushViewController(vc, animated: true)
     }
 }

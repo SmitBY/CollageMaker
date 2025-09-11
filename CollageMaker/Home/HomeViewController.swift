@@ -273,13 +273,16 @@ class HomeViewController: UIViewController {
 
         // Используем координатор из view model
         if let coordinator = viewModel.coordinator as? MainViewCoordinator {
-            coordinator.showCollageEditor(with: template)
+            coordinator.showCollageEditor(with: template, selectedPhotos: photosForEditor)
+            return
+        } else if let coordinator = viewModel.coordinator as? HomeViewCoordinator {
+            coordinator.showCollageEditor(with: template, selectedPhotos: photosForEditor)
             return
         }
 
         // Fallback: если координатор не найден, создаем редактор напрямую
         let editorViewModel = CollageEditorViewModel(template: template)
-        let editorVC = CollageEditorViewController(viewModel: editorViewModel)
+        let editorVC = CollageEditorViewController(viewModel: editorViewModel, selectedPhotos: photosForEditor)
         navigationController?.pushViewController(editorVC, animated: true)
     }
 }

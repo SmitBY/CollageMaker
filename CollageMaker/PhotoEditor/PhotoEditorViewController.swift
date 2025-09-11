@@ -223,6 +223,7 @@ class PhotoEditorViewController: UIViewController {
     init(viewModel: PhotoEditorViewModel) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
+        modalPresentationStyle = .fullScreen
         print("[PhotoEditorViewController] init(viewModel:) called")
     }
     
@@ -233,6 +234,7 @@ class PhotoEditorViewController: UIViewController {
     // MARK: - Lifecycle Methods
     override func viewDidLoad() {
         super.viewDidLoad()
+        navigationController?.setNavigationBarHidden(true, animated: false)
         setupUI()
         setupBindings()
         setupGestureRecognizers()
@@ -282,19 +284,19 @@ class PhotoEditorViewController: UIViewController {
         headerView.addSubview(subtitleLabel)
         
         headerView.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide).offset(10)
-            make.leading.trailing.equalToSuperview().inset(16)
-            make.height.equalTo(60)
+            make.top.equalTo(view.safeAreaLayoutGuide)
+            make.leading.trailing.equalToSuperview().inset(8)
+            make.height.equalTo(44)
         }
         
         titleLabel.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(12)
-            make.leading.trailing.equalToSuperview().inset(16)
+            make.top.equalToSuperview().offset(6)
+            make.leading.trailing.equalToSuperview().inset(12)
         }
         
         subtitleLabel.snp.makeConstraints { make in
             make.top.equalTo(titleLabel.snp.bottom).offset(2)
-            make.leading.trailing.equalToSuperview().inset(16)
+            make.leading.trailing.equalToSuperview().inset(12)
         }
         
         // Добавляем CropOverlayView поверх всего экрана
@@ -307,10 +309,9 @@ class PhotoEditorViewController: UIViewController {
         photoContainerView.backgroundColor = .black
         view.addSubview(photoContainerView)
         photoContainerView.snp.makeConstraints { make in
-            make.left.equalToSuperview().offset(16)
-            make.right.equalToSuperview().inset(16)
-            make.top.equalTo(headerView.snp.bottom).offset(20)
-            make.bottom.equalTo(view.safeAreaLayoutGuide).offset(-200) // Оставляем место для элементов управления
+            make.left.equalToSuperview().offset(8)
+            make.right.equalToSuperview().inset(8)
+            make.top.equalTo(headerView.snp.bottom).offset(8)
         }
         
         // Добавляем ImageView напрямую в photoContainerView
@@ -333,12 +334,13 @@ class PhotoEditorViewController: UIViewController {
             make.height.equalTo(cropGridView).offset(-60) // Оставляем 30px сверху и снизу для хендлов
         }
         
-        // Добавляем коллекцию форматов изображений
+        // Добавляем коллекцию форматов изображений (жёстко связываем цепочку ниже photoContainerView)
         view.addSubview(aspectRatioCollectionView)
         aspectRatioCollectionView.snp.makeConstraints { make in
             make.top.equalTo(photoContainerView.snp.bottom).offset(10)
             make.left.right.equalToSuperview()
-            make.height.equalTo(50)
+            // Фиксируем высоту, но допускаем компрессию
+            make.height.equalTo(50).priority(.required)
         }
         
         // Добавляем коллекцию фильтров
@@ -346,10 +348,11 @@ class PhotoEditorViewController: UIViewController {
         filtersCollectionView.snp.makeConstraints { make in
             make.top.equalTo(aspectRatioCollectionView.snp.bottom).offset(10)
             make.left.right.equalToSuperview()
-            make.height.equalTo(100)
+            // Ставим slightly lower priority, чтобы SnapKit мог разрулить при нехватке пространства
+            make.height.equalTo(100).priority(.high)
         }
         
-        // Добавляем кнопки
+        // Добавляем кнопки (фиксируем нижнюю границу, чтобы растянуть экран)
         view.addSubview(buttonStackView)
         buttonStackView.addArrangedSubview(cancelButton)
         buttonStackView.addArrangedSubview(saveButton)
@@ -357,7 +360,7 @@ class PhotoEditorViewController: UIViewController {
             make.top.equalTo(filtersCollectionView.snp.bottom).offset(10)
             make.left.right.equalToSuperview().inset(16)
             make.height.equalTo(44)
-            make.bottom.lessThanOrEqualTo(view.safeAreaLayoutGuide).inset(10)
+            make.bottom.equalTo(view.safeAreaLayoutGuide).inset(10)
         }
     }
     

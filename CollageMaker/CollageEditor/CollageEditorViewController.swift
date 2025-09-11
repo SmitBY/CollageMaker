@@ -12,6 +12,12 @@ import RxCocoa
 import Photos
 import PhotosUI
 
+// Протокол для показа фоторедактора из редактора коллажей
+protocol PhotoEditorRouting: AnyObject {
+    func showPhotoEditor(with image: UIImage)
+    func showGallery()
+}
+
 // MARK: - Aspect Ratio Model
 struct AspectRatio {
     let id: String
@@ -127,7 +133,7 @@ extension UserDefaults {
 /// It is initialized with a CollageEditorViewModel.
 class CollageEditorViewController: UIViewController {
     
-    weak var coordinator: MainViewCoordinator?
+    weak var coordinator: PhotoEditorRouting?
     
     // MARK: - Properties
     
@@ -2241,16 +2247,32 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
     // MARK: - Photo Editor Integration
     
     private func openPhotoEditor(with image: UIImage, for imageView: UIImageView) {
-        guard image != UIImage(named: "placeholder"),
-              let coordinator = coordinator else {
-            print("❌ Не удалось открыть PhotoEditor")
+        guard image != UIImage(named: "placeholder") else {
+            print("ℹ️ Невозможно редактировать placeholder")
             return
         }
         
         print("🎨 Открываем PhotoEditor для редактирования изображения")
         
-        // Используем MainViewCoordinator для открытия фоторедактора
-        coordinator.showPhotoEditor(with: image)
+        if let coordinator = coordinator {
+            coordinator.showPhotoEditor(with: image)
+        } else {
+            // Fallback: показываем редактор напрямую, если координатор не установлен
+            let photoEditorViewModel = PhotoEditorViewModel(image: image)
+            let photoEditorVC = PhotoEditorViewController(viewModel: photoEditorViewModel)
+            var presenter: UIViewController = self
+            while let presented = presenter.presentedViewController {
+                presenter = presented
+            }
+            // Если есть навигация — пушим
+            if let nav = (presenter as? UINavigationController) ?? presenter.navigationController {
+                nav.pushViewController(photoEditorVC, animated: true)
+            } else {
+                let nav = UINavigationController(rootViewController: photoEditorVC)
+                nav.modalPresentationStyle = .fullScreen
+                presenter.present(nav, animated: true, completion: nil)
+            }
+        }
     }
     
     private func handleEditedImage(_ editedImage: UIImage?, for imageView: UIImageView?) {

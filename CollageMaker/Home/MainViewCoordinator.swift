@@ -9,7 +9,7 @@ import UIKit
 import RxSwift
 
 /// Координатор для работы с MainTabBarController вместо UINavigationController
-class MainViewCoordinator: Coordinator {
+class MainViewCoordinator: Coordinator, PhotoEditorRouting {
     var childCoordinators: [Coordinator] = []
     private let disposeBag = DisposeBag()
 
@@ -25,13 +25,16 @@ class MainViewCoordinator: Coordinator {
     }
 
     /// Переход на CollageEditorViewController с выбранным шаблоном.
-    func showCollageEditor(with template: CollageTemplate) {
+    /// - Parameters:
+    ///   - template: выбранный шаблон
+    ///   - selectedPhotos: массив выбранных пользователем изображений
+    func showCollageEditor(with template: CollageTemplate, selectedPhotos: [UIImage] = []) {
         print("[MainViewCoordinator] Navigating to CollageEditorViewController with template: \(template.name)")
 
         let editorViewModel = CollageEditorViewModel(template: template)
-        let editorVC = CollageEditorViewController(viewModel: editorViewModel)
+        let editorVC = CollageEditorViewController(viewModel: editorViewModel, selectedPhotos: selectedPhotos)
 
-        // Устанавливаем координатор для навигации из редактора
+        // Устанавливаем координатор для навигации из редактора (реализует PhotoEditorRouting)
         editorVC.coordinator = self
 
         // Используем таб-бар для модального показа редактора
@@ -46,17 +49,24 @@ class MainViewCoordinator: Coordinator {
     func showPhotoEditor(with image: UIImage) {
         let photoEditorViewModel = PhotoEditorViewModel(image: image)
         let photoEditorVC = PhotoEditorViewController(viewModel: photoEditorViewModel)
-        photoEditorVC.modalPresentationStyle = .overFullScreen
+        
+        guard let tabBarController = tabBarController else { return }
 
-        if let tabBarController = tabBarController {
-            tabBarController.present(photoEditorVC, animated: true, completion: nil)
+        // Всегда показываем модально на весь экран от корневого верхнего VC
+        var presenter: UIViewController = tabBarController
+        while let presented = presenter.presentedViewController {
+            presenter = presented
         }
+        let nav = UINavigationController(rootViewController: photoEditorVC)
+        nav.modalPresentationStyle = .fullScreen
+        nav.setNavigationBarHidden(true, animated: false)
+        photoEditorVC.modalTransitionStyle = .crossDissolve
+        presenter.present(nav, animated: true, completion: nil)
     }
 
-    /// Переход на галерею проектов
     func showGallery() {
         if let tabBarController = tabBarController {
-            tabBarController.selectTab(index: 3) // Projects tab
+            tabBarController.selectTab(index: 3)
         }
     }
 }
