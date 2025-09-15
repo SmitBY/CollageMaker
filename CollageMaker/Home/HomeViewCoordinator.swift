@@ -72,6 +72,7 @@ class HomeViewCoordinator: Coordinator, PhotoEditorRouting {
         // Переход в галерею через push
         let vm = GalleryViewModel()
         let vc = GalleryViewController(viewModel: vm)
+        vc.coordinator = self
         navigationController.pushViewController(vc, animated: true)
     }
 }

@@ -16,10 +16,10 @@ class GalleryCollectionViewCell: UICollectionViewCell {
     
     private let imageView: UIImageView = {
         let imageView = UIImageView()
-        imageView.contentMode = .scaleAspectFit
+        imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         imageView.layer.cornerRadius = 8
-        imageView.backgroundColor = .systemGray6
+        imageView.backgroundColor = .clear
         return imageView
     }()
     
@@ -36,7 +36,7 @@ class GalleryCollectionViewCell: UICollectionViewCell {
         let label = UILabel()
         label.font = UIFont.systemFont(ofSize: 10)
         label.textColor = .white
-        label.backgroundColor = UIColor.black.withAlphaComponent(0.7)
+        label.backgroundColor = .clear
         label.textAlignment = .center
         label.layer.cornerRadius = 4
         label.clipsToBounds = true
@@ -103,7 +103,7 @@ class GalleryViewController: UIViewController {
         layout.sectionInset = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        collectionView.backgroundColor = .black
+        collectionView.backgroundColor = .clear
         collectionView.register(GalleryCollectionViewCell.self, forCellWithReuseIdentifier: GalleryCollectionViewCell.identifier)
         return collectionView
     }()
@@ -172,7 +172,7 @@ class GalleryViewController: UIViewController {
     
     private func setupUI() {
         removeBackgroundGradientLayers()
-        setBackgroundImage(named: "loadback")
+        setBackgroundImage(named: "mainback")
         
         // Добавляем заголовок экрана
         let headerView = UIView()
@@ -328,15 +328,39 @@ class GalleryViewController: UIViewController {
     }
     
     private func editCollage(_ collage: SavedCollage) {
-        // Здесь будет переход к редактору с загруженным коллажем
-        // Пока что просто показываем сообщение
-        let alert = UIAlertController(
-            title: "Редактирование",
-            message: "Функция редактирования будет добавлена в следующем обновлении",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
+        // Пытаемся найти шаблон по имени сохранённого коллажа
+        let templates = CollageTemplatesManager.shared.templates
+        guard let template = templates.first(where: { $0.name == collage.templateName }) ?? templates.first else {
+            return
+        }
+        
+        // Устанавливаем сохранённое соотношение сторон
+        UserDefaults.standard.selectedAspectRatioId = collage.aspectRatioId
+        
+        // Если есть координатор — используем его для открытия редактора
+        if let mainCoordinator = coordinator as? MainViewCoordinator {
+            mainCoordinator.showCollageEditor(with: template, selectedPhotos: [collage.image])
+            return
+        }
+        if let homeCoordinator = coordinator as? HomeViewCoordinator {
+            homeCoordinator.showCollageEditor(with: template, selectedPhotos: [collage.image])
+            return
+        }
+        
+        // Fallback: открываем напрямую через текущий презентер
+        let editorViewModel = CollageEditorViewModel(template: template)
+        let editorVC = CollageEditorViewController(viewModel: editorViewModel, selectedPhotos: [collage.image])
+        var presenter: UIViewController = self
+        while let presented = presenter.presentedViewController {
+            presenter = presented
+        }
+        if let nav = (presenter as? UINavigationController) ?? presenter.navigationController {
+            nav.pushViewController(editorVC, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: editorVC)
+            nav.modalPresentationStyle = .fullScreen
+            presenter.present(nav, animated: true, completion: nil)
+        }
     }
     
     private func viewCollageFullscreen(_ collage: SavedCollage) {

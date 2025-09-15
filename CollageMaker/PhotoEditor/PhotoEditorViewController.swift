@@ -309,9 +309,9 @@ class PhotoEditorViewController: UIViewController {
         photoContainerView.backgroundColor = .black
         view.addSubview(photoContainerView)
         photoContainerView.snp.makeConstraints { make in
-            make.left.equalToSuperview().offset(8)
-            make.right.equalToSuperview().inset(8)
-            make.top.equalTo(headerView.snp.bottom).offset(8)
+            make.left.equalToSuperview().offset(16)
+            make.right.equalToSuperview().inset(16)
+            make.top.equalTo(headerView.snp.bottom).offset(16)
         }
         
         // Добавляем ImageView напрямую в photoContainerView
