@@ -77,6 +77,8 @@ class HomeViewController: UIViewController {
     private var collageTemplates: [CollageTemplate] = []
     private var userPhotos: [UIImage] = []
     private var selectedPhotos: [UIImage] = []
+    private var userAssets: [PHAsset] = []
+    private var selectedAssetIds: [String] = []
     
     // We'll store gridContainer's tag for later retrieval.
     private let gridContainerTag = 999
@@ -237,24 +239,30 @@ class HomeViewController: UIViewController {
                 fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
                 fetchOptions.fetchLimit = 50
                 
-                let assets = PHAsset.fetchAssets(with: .image, options: fetchOptions)
-                var images: [UIImage] = []
+                let assetsFetch = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+                var thumbnails: [UIImage] = []
+                var fetchedAssets: [PHAsset] = []
                 
                 let imageManager = PHImageManager.default()
                 let requestOptions = PHImageRequestOptions()
                 requestOptions.isSynchronous = true
                 requestOptions.deliveryMode = .highQualityFormat
                 
-                assets.enumerateObjects { asset, _, _ in
-                    imageManager.requestImage(for: asset, targetSize: CGSize(width: 200, height: 200), contentMode: .aspectFill, options: requestOptions) { image, _ in
-                        if let image = image {
-                            images.append(image)
-                        }
+                assetsFetch.enumerateObjects { asset, _, _ in
+                    fetchedAssets.append(asset)
+                    imageManager.requestImage(
+                        for: asset,
+                        targetSize: CGSize(width: 200, height: 200),
+                        contentMode: .aspectFill,
+                        options: requestOptions
+                    ) { image, _ in
+                        thumbnails.append(image ?? UIImage())
                     }
                 }
                 
                 DispatchQueue.main.async {
-                    self.userPhotos = images
+                    self.userAssets = fetchedAssets
+                    self.userPhotos = thumbnails
                     self.photosCollectionView.reloadData()
                 }
             }
@@ -262,28 +270,77 @@ class HomeViewController: UIViewController {
     }
     
     private func openCollageEditor(with template: CollageTemplate) {
-        // Создаем массив фотографий для редактора
-        var photosForEditor = selectedPhotos
-
-        // Если выбрано меньше фото чем требует шаблон, добавляем пустые места
-        let requiredPhotos = template.positions.count
-        while photosForEditor.count < requiredPhotos {
-            photosForEditor.append(UIImage()) // Пустое изображение как заглушка
-        }
-
-        // Используем координатор из view model
-        if let coordinator = viewModel.coordinator as? MainViewCoordinator {
-            coordinator.showCollageEditor(with: template, selectedPhotos: photosForEditor)
+        let selectedIds = selectedAssetIds
+        
+        // Если нет идентификаторов (старый сценарий) — откатываемся к текущим изображениям
+        guard !selectedIds.isEmpty else {
+            var photosForEditor = selectedPhotos
+            let requiredPhotos = template.positions.count
+            while photosForEditor.count < requiredPhotos {
+                photosForEditor.append(UIImage())
+            }
+            if let coordinator = viewModel.coordinator as? MainViewCoordinator {
+                coordinator.showCollageEditor(with: template, selectedPhotos: photosForEditor)
+                return
+            } else if let coordinator = viewModel.coordinator as? HomeViewCoordinator {
+                coordinator.showCollageEditor(with: template, selectedPhotos: photosForEditor)
+                return
+            }
+            let editorViewModel = CollageEditorViewModel(template: template)
+            let editorVC = CollageEditorViewController(viewModel: editorViewModel, selectedPhotos: photosForEditor)
+            navigationController?.pushViewController(editorVC, animated: true)
             return
-        } else if let coordinator = viewModel.coordinator as? HomeViewCoordinator {
-            coordinator.showCollageEditor(with: template, selectedPhotos: photosForEditor)
-            return
         }
-
-        // Fallback: если координатор не найден, создаем редактор напрямую
-        let editorViewModel = CollageEditorViewModel(template: template)
-        let editorVC = CollageEditorViewController(viewModel: editorViewModel, selectedPhotos: photosForEditor)
-        navigationController?.pushViewController(editorVC, animated: true)
+        
+        let imageManager = PHImageManager.default()
+        let requestOptions = PHImageRequestOptions()
+        requestOptions.deliveryMode = .highQualityFormat
+        requestOptions.isNetworkAccessAllowed = true
+        requestOptions.resizeMode = .none
+        requestOptions.isSynchronous = false
+        
+        var fullImages = Array<UIImage>(repeating: UIImage(), count: selectedIds.count)
+        let group = DispatchGroup()
+        
+        for (index, id) in selectedIds.enumerated() {
+            guard let asset = userAssets.first(where: { $0.localIdentifier == id }) else {
+                if index < selectedPhotos.count { fullImages[index] = selectedPhotos[index] }
+                continue
+            }
+            group.enter()
+            imageManager.requestImage(
+                for: asset,
+                targetSize: PHImageManagerMaximumSize,
+                contentMode: .default,
+                options: requestOptions
+            ) { [weak self] image, _ in
+                if let image = image {
+                    fullImages[index] = image
+                } else if let self = self, index < self.selectedPhotos.count {
+                    fullImages[index] = self.selectedPhotos[index]
+                }
+                group.leave()
+            }
+        }
+        
+        group.notify(queue: .main) { [weak self] in
+            guard let self = self else { return }
+            var photosForEditor = fullImages
+            let requiredPhotos = template.positions.count
+            while photosForEditor.count < requiredPhotos {
+                photosForEditor.append(UIImage())
+            }
+            if let coordinator = self.viewModel.coordinator as? MainViewCoordinator {
+                coordinator.showCollageEditor(with: template, selectedPhotos: photosForEditor)
+                return
+            } else if let coordinator = self.viewModel.coordinator as? HomeViewCoordinator {
+                coordinator.showCollageEditor(with: template, selectedPhotos: photosForEditor)
+                return
+            }
+            let editorViewModel = CollageEditorViewModel(template: template)
+            let editorVC = CollageEditorViewController(viewModel: editorViewModel, selectedPhotos: photosForEditor)
+            self.navigationController?.pushViewController(editorVC, animated: true)
+        }
     }
 }
 
@@ -307,9 +364,10 @@ extension HomeViewController: UICollectionViewDataSource, UICollectionViewDelega
             return cell
         } else if collectionView == photosCollectionView {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "PhotoCell", for: indexPath) as! PhotoCell
-            let photo = userPhotos[indexPath.item]
-            let isSelected = selectedPhotos.contains { $0 === photo }
-            cell.configure(with: photo, isSelected: isSelected)
+            let thumbnail = userPhotos[indexPath.item]
+            let asset = userAssets[indexPath.item]
+            let isSelected = selectedAssetIds.contains(asset.localIdentifier)
+            cell.configure(with: thumbnail, isSelected: isSelected)
             return cell
         }
         return UICollectionViewCell()
@@ -320,24 +378,20 @@ extension HomeViewController: UICollectionViewDataSource, UICollectionViewDelega
             let template = collageTemplates[indexPath.item]
             openCollageEditor(with: template)
         } else if collectionView == photosCollectionView {
-            let photo = userPhotos[indexPath.item]
+            let asset = userAssets[indexPath.item]
+            let assetId = asset.localIdentifier
+            let thumbnail = userPhotos[indexPath.item]
             
-            // Проверяем, выбрано ли уже это фото
-            if let existingIndex = selectedPhotos.firstIndex(where: { $0 === photo }) {
-                // Убираем фото из выбранных
+            if let existingIndex = selectedAssetIds.firstIndex(of: assetId) {
+                selectedAssetIds.remove(at: existingIndex)
                 selectedPhotos.remove(at: existingIndex)
             } else {
-                // Добавляем фото к выбранным
-                selectedPhotos.append(photo)
+                selectedAssetIds.append(assetId)
+                selectedPhotos.append(thumbnail)
             }
             
-            // Обновляем шаблоны
             updateTemplatesForSelectedPhotos()
-            
-            // Обновляем подпись с количеством выбранных фото
             updatePhotosLabel()
-            
-            // Обновляем визуальное состояние ячейки
             photosCollectionView.reloadItems(at: [indexPath])
         }
     }

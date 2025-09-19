@@ -14,7 +14,7 @@ import PhotosUI
 
 // Протокол для показа фоторедактора из редактора коллажей
 protocol PhotoEditorRouting: AnyObject {
-    func showPhotoEditor(with image: UIImage)
+    func showPhotoEditor(with image: UIImage, completion: @escaping (UIImage?) -> Void)
     func showGallery()
 }
 
@@ -2255,11 +2255,16 @@ extension CollageEditorViewController: UIImagePickerControllerDelegate, UINaviga
         print("🎨 Открываем PhotoEditor для редактирования изображения")
         
         if let coordinator = coordinator {
-            coordinator.showPhotoEditor(with: image)
+            coordinator.showPhotoEditor(with: image) { [weak self, weak imageView] editedImage in
+                self?.handleEditedImage(editedImage, for: imageView)
+            }
         } else {
             // Fallback: показываем редактор напрямую, если координатор не установлен
             let photoEditorViewModel = PhotoEditorViewModel(image: image)
             let photoEditorVC = PhotoEditorViewController(viewModel: photoEditorViewModel)
+            photoEditorVC.editingCompletion = { [weak self, weak imageView] editedImage in
+                self?.handleEditedImage(editedImage, for: imageView)
+            }
             var presenter: UIViewController = self
             while let presented = presenter.presentedViewController {
                 presenter = presented

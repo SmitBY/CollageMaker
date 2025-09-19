@@ -46,9 +46,10 @@ class MainViewCoordinator: Coordinator, PhotoEditorRouting {
     }
 
     /// Показ PhotoEditorViewController поверх текущего контроллера
-    func showPhotoEditor(with image: UIImage) {
+    func showPhotoEditor(with image: UIImage, completion: @escaping (UIImage?) -> Void) {
         let photoEditorViewModel = PhotoEditorViewModel(image: image)
         let photoEditorVC = PhotoEditorViewController(viewModel: photoEditorViewModel)
+        photoEditorVC.editingCompletion = completion
         
         guard let tabBarController = tabBarController else { return }
 

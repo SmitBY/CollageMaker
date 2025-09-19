@@ -100,6 +100,9 @@ class StickerView: UIView {
         // Добавляем tap gesture
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(viewTapped))
         addGestureRecognizer(tapGesture)
+
+        // Изначально компенсируем масштаб для кнопок управления
+        updateControlButtonsScaleCompensation()
     }
     
     private func setupGestures() {
@@ -161,6 +164,8 @@ class StickerView: UIView {
             let scale = gesture.scale
             transform = transform.scaledBy(x: scale, y: scale)
             gesture.scale = 1.0
+            // Компенсируем масштаб иконок
+            updateControlButtonsScaleCompensation()
         default:
             break
         }
@@ -171,6 +176,8 @@ class StickerView: UIView {
         case .changed:
             transform = transform.rotated(by: gesture.rotation)
             gesture.rotation = 0
+            // Обновляем компенсацию масштаба (на случай неравномерных трансформаций)
+            updateControlButtonsScaleCompensation()
         default:
             break
         }
@@ -205,6 +212,9 @@ class StickerView: UIView {
             // Обновляем иконку в зависимости от направления
             let iconName = translation.y < 0 ? "plus.magnifyingglass" : "minus.magnifyingglass"
             scaleButton.setImage(UIImage(systemName: iconName), for: .normal)
+
+            // Компенсируем масштаб иконок
+            updateControlButtonsScaleCompensation()
             
         case .ended, .cancelled:
             // Возвращаем кнопку к нормальному состоянию
@@ -242,6 +252,9 @@ class StickerView: UIView {
             // Применяем небольшое вращение
             let rotationIncrement = angle * 0.05 // Чувствительность вращения
             transform = transform.rotated(by: rotationIncrement)
+
+            // Обновляем компенсацию масштаба для кнопок
+            updateControlButtonsScaleCompensation()
             
         case .ended, .cancelled:
             // Возвращаем кнопку к нормальному состоянию
@@ -294,15 +307,18 @@ class StickerView: UIView {
     // MARK: - External Transform Controls
     func applyScale(_ scale: CGFloat) {
         transform = transform.scaledBy(x: scale, y: scale)
+        updateControlButtonsScaleCompensation()
     }
     
     func applyRotation(_ rotation: CGFloat) {
         transform = transform.rotated(by: rotation)
+        updateControlButtonsScaleCompensation()
     }
     
     func resetTransform() {
         UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
             self.transform = .identity
+            self.updateControlButtonsScaleCompensation()
         }
     }
     
@@ -317,5 +333,27 @@ extension StickerView: UIGestureRecognizerDelegate {
         // Позволяем одновременное распознавание жестов масштабирования и поворота
         return (gestureRecognizer == pinchGesture && otherGestureRecognizer == rotationGesture) ||
                (gestureRecognizer == rotationGesture && otherGestureRecognizer == pinchGesture)
+    }
+}
+
+// MARK: - Fixed-size control buttons support
+extension StickerView {
+    private func updateControlButtonsScaleCompensation() {
+        // Извлекаем текущий масштаб из матрицы аффинных преобразований
+        let a = transform.a
+        let c = transform.c
+        let scale = sqrt(a * a + c * c)
+        let inverseScale = scale == 0 ? 1.0 : (1.0 / scale)
+
+        let compensation = CGAffineTransform(scaleX: inverseScale, y: inverseScale)
+        deleteButton.transform = compensation
+        scaleButton.transform = compensation
+        rotationButton.transform = compensation
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Обновляем компенсацию при любом изменении лейаута
+        updateControlButtonsScaleCompensation()
     }
 }

@@ -181,6 +181,9 @@ class TextLayerView: UIView {
         
         deleteButton.addTarget(self, action: #selector(deleteButtonTapped), for: .touchUpInside)
         setupControlButtonGestures()
+        
+        // Изначально компенсируем масштаб для кнопок управления
+        updateControlButtonsScaleCompensation()
     }
     
     private func setupGestures() {
@@ -314,6 +317,9 @@ class TextLayerView: UIView {
                 // После изменения масштаба корректируем позицию
                 let constrainedCenter = constrainTextLayerCenter(center, containerView: containerView)
                 center = constrainedCenter
+
+                // Компенсируем масштаб иконок управления
+                updateControlButtonsScaleCompensation()
             }
             
         case .ended:
@@ -363,6 +369,9 @@ class TextLayerView: UIView {
             // После поворота корректируем позицию
             let constrainedCenter = constrainTextLayerCenter(center, containerView: containerView)
             center = constrainedCenter
+
+            // Компенсируем масштаб иконок управления
+            updateControlButtonsScaleCompensation()
             
         case .ended:
             // Нормальное завершение вращения
@@ -455,6 +464,9 @@ class TextLayerView: UIView {
             // Обновляем иконку в зависимости от направления
             let iconName = translation.y < 0 ? "plus.magnifyingglass" : "minus.magnifyingglass"
             scaleControlButton.setImage(UIImage(systemName: iconName), for: .normal)
+
+            // Компенсируем масштаб иконок
+            updateControlButtonsScaleCompensation()
             
         case .ended, .cancelled:
             // Возвращаем кнопку к нормальному состоянию
@@ -492,6 +504,9 @@ class TextLayerView: UIView {
             // Применяем небольшое вращение
             let rotationIncrement = angle * 0.05 // Чувствительность вращения
             transform = transform.rotated(by: rotationIncrement)
+
+            // Обновляем компенсацию масштаба для кнопок
+            updateControlButtonsScaleCompensation()
             
         case .ended, .cancelled:
             // Возвращаем кнопку к нормальному состоянию
@@ -834,4 +849,25 @@ extension TextLayerView: UIGestureRecognizerDelegate {
     }
 }
 
+// MARK: - Fixed-size control buttons support
+extension TextLayerView {
+    private func updateControlButtonsScaleCompensation() {
+        // Извлекаем текущий масштаб из аффинного transform
+        let a = transform.a
+        let c = transform.c
+        let scale = sqrt(a * a + c * c)
+        let inverseScale = scale == 0 ? 1.0 : (1.0 / scale)
+
+        let compensation = CGAffineTransform(scaleX: inverseScale, y: inverseScale)
+        deleteButton.transform = compensation
+        scaleControlButton.transform = compensation
+        rotationControlButton.transform = compensation
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Обновляем компенсацию при любом изменении лейаута
+        updateControlButtonsScaleCompensation()
+    }
+}
  

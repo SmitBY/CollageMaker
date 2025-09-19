@@ -59,9 +59,10 @@ class HomeViewCoordinator: Coordinator, PhotoEditorRouting {
     }
     
     /// Новый метод для показа PhotoEditorViewController поверх CollageEditorViewController.
-    func showPhotoEditor(with image: UIImage) {
+    func showPhotoEditor(with image: UIImage, completion: @escaping (UIImage?) -> Void) {
         let photoEditorViewModel = PhotoEditorViewModel(image: image)
         let photoEditorVC = PhotoEditorViewController(viewModel: photoEditorViewModel)
+        photoEditorVC.editingCompletion = completion
         let nav = UINavigationController(rootViewController: photoEditorVC)
         nav.modalPresentationStyle = .fullScreen
         nav.setNavigationBarHidden(true, animated: false)
