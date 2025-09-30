@@ -133,12 +133,20 @@ class MainTabBarController: UIViewController {
         view.addSubview(customTabBar)
         customTabBar.addSubview(tabStackView)
         
-        // Добавляем кнопки в стек
+        // Добавляем кнопки в стек (без центральной)
         tabStackView.addArrangedSubview(homeButton)
         tabStackView.addArrangedSubview(templatesButton)
-        tabStackView.addArrangedSubview(createButton)
+        
+        // Добавляем пустое место для центральной кнопки
+        let spacerView = UIView()
+        spacerView.backgroundColor = .clear
+        tabStackView.addArrangedSubview(spacerView)
+        
         tabStackView.addArrangedSubview(projectsButton)
         tabStackView.addArrangedSubview(moreButton)
+        
+        // Центральную кнопку добавляем отдельно поверх стека
+        customTabBar.addSubview(createButton)
         
         // Constraints
         containerView.snp.makeConstraints { make in
@@ -148,14 +156,25 @@ class MainTabBarController: UIViewController {
         
         customTabBar.snp.makeConstraints { make in
             make.leading.trailing.bottom.equalToSuperview()
-            make.height.equalTo(80) // Стандартная высота для всех кнопок
+            make.height.equalTo(110) // Увеличенная высота для центральной кнопки 90px
         }
         
         tabStackView.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(0) // Убираем верхний отступ для подъема кнопок
             make.leading.trailing.equalToSuperview().inset(20)
             make.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).offset(-10)
+            make.height.equalTo(58) // Фиксированная высота для обычных кнопок с текстом
         }
+        
+        // Позиционируем центральную кнопку отдельно - по центру, низ совпадает с остальными
+        createButton.snp.makeConstraints { make in
+            make.centerX.equalToSuperview()
+            make.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).offset(-10) // Тот же bottom что у стека
+            make.width.equalTo(90)
+            make.height.equalTo(90)
+        }
+        
+        // Делаем кнопку круглой
+        createButton.layer.cornerRadius = 45
         
         // Настраиваем кнопки
         setupTabButtons()
@@ -185,7 +204,7 @@ class MainTabBarController: UIViewController {
 
             // Настраиваем размеры для обычных кнопок
             button.snp.makeConstraints { make in
-                make.height.equalTo(60) // Стандартная высота для обычных кнопок
+                make.height.equalTo(58) // Стандартная высота для обычных кнопок (48px иконка + отступы)
             }
         }
 
@@ -207,10 +226,7 @@ class MainTabBarController: UIViewController {
         createButton.layer.borderColor = UIColor.clear.cgColor
         createButton.layer.cornerRadius = 0
 
-        createButton.snp.makeConstraints { make in
-            make.height.equalTo(60) // Стандартная высота
-            make.top.equalToSuperview().offset(-30) // Поднимаем кнопку на 30 пикселей выше
-        }
+        // Размер центральной кнопки задаётся в setupUI
     }
     
     private func setupBindings() {

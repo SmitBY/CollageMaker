@@ -193,9 +193,9 @@ class StickerView: UIView {
             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
             
-            // Анимация кнопки
+            // Лёгкая анимация без изменения размера
             UIView.animate(withDuration: 0.1) {
-                self.scaleButton.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
+                self.scaleButton.alpha = 0.8
             }
             
         case .changed:
@@ -217,9 +217,9 @@ class StickerView: UIView {
             updateControlButtonsScaleCompensation()
             
         case .ended, .cancelled:
-            // Возвращаем кнопку к нормальному состоянию
+            // Возвращаем кнопку к нормальному состоянию без масштабирования
             UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
-                self.scaleButton.transform = .identity
+                self.scaleButton.alpha = 1.0
                 self.scaleButton.setImage(UIImage(systemName: "plus.magnifyingglass"), for: .normal)
             }
             
@@ -238,9 +238,9 @@ class StickerView: UIView {
             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
             
-            // Анимация кнопки
+            // Лёгкая анимация без изменения размера
             UIView.animate(withDuration: 0.1) {
-                self.rotationButton.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
+                self.rotationButton.alpha = 0.8
             }
             
         case .changed:
@@ -257,9 +257,9 @@ class StickerView: UIView {
             updateControlButtonsScaleCompensation()
             
         case .ended, .cancelled:
-            // Возвращаем кнопку к нормальному состоянию
+            // Возвращаем кнопку к нормальному состоянию без масштабирования
             UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
-                self.rotationButton.transform = .identity
+                self.rotationButton.alpha = 1.0
             }
             
         default:
@@ -291,15 +291,21 @@ class StickerView: UIView {
     private func animateButtonsAppearance() {
         let buttons = [deleteButton, scaleButton, rotationButton]
         
+        // Сохраняем текущую компенсацию масштаба для каждой кнопки
+        let savedTransforms = buttons.map { $0.transform }
+        
         buttons.forEach { button in
             button.alpha = 0
-            button.transform = CGAffineTransform(scaleX: 0.1, y: 0.1)
+            // Применяем начальный масштаб анимации ПОВЕРХ существующей компенсации
+            let currentTransform = button.transform
+            button.transform = currentTransform.scaledBy(x: 0.1, y: 0.1)
         }
         
         UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
-            buttons.forEach { button in
+            buttons.enumerated().forEach { index, button in
                 button.alpha = 1.0
-                button.transform = .identity
+                // Восстанавливаем сохраненную компенсацию масштаба
+                button.transform = savedTransforms[index]
             }
         }
     }

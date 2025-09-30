@@ -445,9 +445,9 @@ class TextLayerView: UIView {
             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
             
-            // Анимация кнопки
+            // Лёгкая анимация без изменения размера
             UIView.animate(withDuration: 0.1) {
-                self.scaleControlButton.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
+                self.scaleControlButton.alpha = 0.8
             }
             
         case .changed:
@@ -469,9 +469,9 @@ class TextLayerView: UIView {
             updateControlButtonsScaleCompensation()
             
         case .ended, .cancelled:
-            // Возвращаем кнопку к нормальному состоянию
+            // Возвращаем кнопку к нормальному состоянию без масштабирования
             UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
-                self.scaleControlButton.transform = .identity
+                self.scaleControlButton.alpha = 1.0
                 self.scaleControlButton.setImage(UIImage(systemName: "plus.magnifyingglass"), for: .normal)
             }
             
@@ -490,9 +490,9 @@ class TextLayerView: UIView {
             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
             
-            // Анимация кнопки
+            // Лёгкая анимация без изменения размера
             UIView.animate(withDuration: 0.1) {
-                self.rotationControlButton.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
+                self.rotationControlButton.alpha = 0.8
             }
             
         case .changed:
@@ -509,9 +509,9 @@ class TextLayerView: UIView {
             updateControlButtonsScaleCompensation()
             
         case .ended, .cancelled:
-            // Возвращаем кнопку к нормальному состоянию
+            // Возвращаем кнопку к нормальному состоянию без масштабирования
             UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
-                self.rotationControlButton.transform = .identity
+                self.rotationControlButton.alpha = 1.0
             }
             
         default:
@@ -648,15 +648,21 @@ class TextLayerView: UIView {
     private func animateControlButtonsAppearance() {
         let buttons = [deleteButton, scaleControlButton, rotationControlButton]
         
+        // Сохраняем текущую компенсацию масштаба для каждой кнопки
+        let savedTransforms = buttons.map { $0.transform }
+        
         buttons.forEach { button in
             button.alpha = 0
-            button.transform = CGAffineTransform(scaleX: 0.1, y: 0.1)
+            // Применяем начальный масштаб анимации ПОВЕРХ существующей компенсации
+            let currentTransform = button.transform
+            button.transform = currentTransform.scaledBy(x: 0.1, y: 0.1)
         }
         
         UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
-            buttons.forEach { button in
+            buttons.enumerated().forEach { index, button in
                 button.alpha = 1.0
-                button.transform = .identity
+                // Восстанавливаем сохраненную компенсацию масштаба
+                button.transform = savedTransforms[index]
             }
         }
     }
