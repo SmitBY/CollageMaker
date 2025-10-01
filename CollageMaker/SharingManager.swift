@@ -78,21 +78,43 @@ import Darwin.Mach
                 return
             }
             
-            // Оптимизируем изображение и получаем Data для лучшей совместимости с расширениями
-            guard let optimizedImageData = optimizeImageForSharing(image) else {
-                print("❌ SharingManager: Не удалось оптимизировать изображение для sharing")
+            // Подготовим временный JPEG-файл (даунскейл + сжатие), передаем URL
+            func downscale(_ img: UIImage, maxDimension: CGFloat) -> UIImage {
+                let size = img.size
+                let maxSide = max(size.width, size.height)
+                guard maxSide > maxDimension else { return img }
+                let scale = maxDimension / maxSide
+                let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+                UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+                img.draw(in: CGRect(origin: .zero, size: newSize))
+                let resized = UIGraphicsGetImageFromCurrentImageContext()
+                UIGraphicsEndImageContext()
+                return resized ?? img
+            }
+
+            let resized = downscale(image, maxDimension: 2048)
+            let jpegQuality: CGFloat = 0.85
+            guard let jpegData = resized.jpegData(compressionQuality: jpegQuality) else {
+                print("❌ SharingManager: Не удалось создать JPEG данные")
                 showSharingError(from: presentingViewController, message: "Не удалось подготовить изображение для sharing")
                 Self.shareFailureCount += 1
                 return
             }
-            
-            print("✅ SharingManager: Изображение оптимизировано, размер: \(optimizedImageData.count) bytes")
-            
-            // Создаем массив элементов для sharing
-            var activityItems: [Any] = []
-            
-            // Добавляем изображение как Data для лучшей совместимости с расширениями
-            activityItems.append(optimizedImageData)
+
+            let tempDir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            let fileURL = tempDir.appendingPathComponent("collage_\(UUID().uuidString).jpg")
+            do {
+                try jpegData.write(to: fileURL, options: .atomic)
+                print("✅ SharingManager: Подготовлен временный файл: \(fileURL)")
+            } catch {
+                print("❌ SharingManager: Ошибка записи временного файла: \(error)")
+                showSharingError(from: presentingViewController, message: "Не удалось сохранить временный файл для sharing")
+                Self.shareFailureCount += 1
+                return
+            }
+
+            // Создаем массив элементов для sharing (URL + текст)
+            var activityItems: [Any] = [fileURL]
             
             // Добавляем текст если он предоставлен
             if let text = text, !text.isEmpty {
@@ -209,41 +231,28 @@ import Darwin.Mach
                     }
                 } else if completed {
                     print("✅ SharingManager: Sharing успешно завершен")
-                    
-                    // Проверяем, если это Telegram - показываем специальное сообщение
-                    if let activityType = activityType, activityType.rawValue.contains("telegra") {
-                        print("🎉 SharingManager: Detected Telegram success, showing success alert")
-                        self?.waitForDismissalAndShowSuccess(from: presentingViewController)
-                    }
+                    // Ничего дополнительно не показываем, сразу выходим
                 } else {
                     print("ℹ️ SharingManager: Sharing отменен пользователем")
                 }
                 
+                // Чистим временный файл
+                try? FileManager.default.removeItem(at: fileURL)
                 completion?()
             }
             
             print("🔗 SharingManager: Показываем ActivityViewController")
             
-            // ⏰ ЗАПУСК ТАЙМЕРА ДЕТЕКТИРОВАНИЯ ЗАВИСАНИЯ
-            Self.startHangDetectionTimer(from: presentingViewController)
+            // Отключаем детекцию зависаний/таймеры и напрямую отмечаем состояние
+            Self.isCurrentlySharing = true
+            Self.currentPresentingViewController = presentingViewController
             
             // Добавляем небольшую задержку для стабильности
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 presentingViewController.present(activityVC, animated: true) {
                     print("✅ SharingManager: ActivityViewController показан")
                     
-                    // 🔍 ПРОВЕРКА СТАТУСА ЧЕРЕЗ 2 СЕКУНДЫ
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        Self.checkActivityViewControllerStatus()
-                    }
-                    
-                    // Показываем инструкцию для Telegram через 10 секунд, если sharing не завершился
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
-                        if presentingViewController.presentedViewController != nil {
-                            print("⏰ SharingManager: Sharing длится долго, показываем подсказку")
-                            self?.showTelegramHangInstructions(from: presentingViewController)
-                        }
-                    }
+                    // Ничего не показываем сверху, никаких подсказок/оверлеев
                 }
             }
         }
@@ -261,85 +270,11 @@ import Darwin.Mach
             viewController.present(alert, animated: true)
         }
         
-        /// Показывает успешное сообщение для Telegram sharing
-        private func showTelegramSuccessAlert(from viewController: UIViewController) {
-            print("🎉 SharingManager: showTelegramSuccessAlert called")
-            print("🎉 SharingManager: viewController = \(viewController)")
-            print("🎉 SharingManager: viewController.presentedViewController = \(String(describing: viewController.presentedViewController))")
-            
-            // Если основной viewController занят, попробуем показать через root
-            let presentingVC: UIViewController
-            if viewController.presentedViewController != nil {
-                print("🎉 SharingManager: Main VC has modal, trying root VC")
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let window = windowScene.windows.first,
-                   let rootVC = window.rootViewController {
-                    presentingVC = rootVC
-                    print("🎉 SharingManager: Using root VC: \(rootVC)")
-                } else {
-                    presentingVC = viewController
-                    print("🎉 SharingManager: Fallback to original VC")
-                }
-            } else {
-                presentingVC = viewController
-            }
-            
-            let alert = UIAlertController(
-                title: "✅ Изображение передано в Telegram!",
-                message: "Коллаж успешно передан в Telegram! 🎉\n\n📌 ВАЖНО: Даже если вы нажали \"Отмена\", изображение УЖЕ ПЕРЕДАНО в Telegram!\n\nЧто делать дальше:\n\n1️⃣ Откройте приложение Telegram\n2️⃣ Ваше изображение будет доступно для отправки\n3️⃣ Выберите контакт и отправьте\n\n💡 Это особенность iOS 18 - \"отмена\" не означает неудачу!",
-                preferredStyle: .alert
-            )
-            
-            alert.addAction(UIAlertAction(title: "Понятно", style: .default))
-            
-            // Добавляем действие для открытия Telegram (если возможно)
-            alert.addAction(UIAlertAction(title: "Открыть Telegram", style: .default) { _ in
-                if let telegramURL = URL(string: "tg://"),
-                   UIApplication.shared.canOpenURL(telegramURL) {
-                    UIApplication.shared.open(telegramURL)
-                }
-            })
-            
-            // Добавляем действие для обновления Telegram
-            alert.addAction(UIAlertAction(title: "Обновить Telegram", style: .default) { _ in
-                if let appStoreURL = URL(string: "https://apps.apple.com/ru/app/telegram/id747648890") {
-                    UIApplication.shared.open(appStoreURL)
-                }
-            })
-            
-            print("🎉 SharingManager: About to present Telegram success alert via \(presentingVC)")
-            presentingVC.present(alert, animated: true) {
-                print("🎉 SharingManager: Telegram success alert presented successfully")
-            }
-        }
+        /// Отключено: не показывать алерты успеха Telegram
+        private func showTelegramSuccessAlert(from viewController: UIViewController) { }
         
-        /// Показывает инструкции когда Telegram sharing "зависает"
-        private func showTelegramHangInstructions(from viewController: UIViewController) {
-            print("💡 SharingManager: Showing Telegram hang instructions")
-            
-            // Создаем оверлей поверх ActivityViewController
-            let alert = UIAlertController(
-                title: "📱 Telegram не отвечает?",
-                message: "Это известная проблема iOS 18 с Telegram.\n\n✅ ВАШЕ ИЗОБРАЖЕНИЕ УЖЕ ПЕРЕДАНО!\n\n🔧 Что делать:\n\n1️⃣ Нажмите \"Отмена\" в Telegram\n2️⃣ Откройте приложение Telegram\n3️⃣ Ваше изображение будет там!\n\n⚠️ Не нажимайте \"Отправить\" повторно",
-                preferredStyle: .alert
-            )
-            
-            // Создаем действия с правильными обработчиками
-            alert.addAction(UIAlertAction(title: "Понятно", style: .default) { _ in
-                print("🔗 SharingManager: User tapped 'Понятно' in hang instructions")
-            })
-            
-            alert.addAction(UIAlertAction(title: "Открыть Telegram", style: .default) { _ in
-                print("🔗 SharingManager: User chose to open Telegram")
-                if let telegramURL = URL(string: "tg://"),
-                   UIApplication.shared.canOpenURL(telegramURL) {
-                    UIApplication.shared.open(telegramURL)
-                }
-            })
-            
-            // Умная презентация: находим доступный view controller
-            self.findAvailableViewControllerAndPresent(alert: alert, fallbackVC: viewController)
-        }
+        /// Отключено: не показывать инструкции зависания Telegram
+        private func showTelegramHangInstructions(from viewController: UIViewController) { }
         
         /// Находит доступный view controller для презентации alert
         private func findAvailableViewControllerAndPresent(alert: UIAlertController, fallbackVC: UIViewController) {
@@ -363,8 +298,8 @@ import Darwin.Mach
                     topVC = presented
                 }
                 
-                // Если нашли подходящий контроллер - показываем alert
-                if topVC != rootVC.presentedViewController || !(topVC is UIActivityViewController) {
+                // Если сверху уже есть presentedViewController (например, UIActivityViewController), не пытаемся презентовать поверх
+                if topVC.presentedViewController == nil && !(topVC is UIActivityViewController) {
                     print("✅ SharingManager: Presenting alert via \(topVC)")
                     topVC.present(alert, animated: true) {
                         print("✅ SharingManager: Telegram hang instructions presented successfully")
@@ -883,28 +818,9 @@ import Darwin.Mach
         
         /// Запуск таймера обнаружения зависания
         static func startHangDetectionTimer(from viewController: UIViewController) {
-            print("⏰ Запуск таймера детектирования зависания (20 секунд)")
-            
-            // 🔒 БЛОКИРОВКА ПОВТОРНЫХ ПОПЫТОК
+            // Отключено по требованию: не запускаем таймер, просто отмечаем состояние
             isCurrentlySharing = true
             currentPresentingViewController = viewController
-            
-            // ⏰ СОЗДАНИЕ ТАЙМЕРА
-            sharingTimer = Timer.scheduledTimer(withTimeInterval: 20.0, repeats: false) { _ in
-                
-                print("🚨 === ДЕТЕКТИРОВАНО ЗАВИСАНИЕ ШАРИНГА ===")
-                print("⏰ Прошло 20 секунд без завершения шаринга")
-                
-                // 🔍 ДИАГНОСТИКА ЗАВИСАНИЯ
-                diagnoseHangState()
-                
-                // 📱 ПОКАЗ ИНСТРУКЦИЙ
-                showAdvancedHangInstructions()
-                
-                // 📊 ДОБАВЛЕНИЕ В СИСТЕМНЫЕ ПРОБЛЕМЫ
-                systemIssuesDetected.append("Hang detected after 20 seconds")
-                shareFailureCount += 1
-            }
         }
         
         /// Диагностика зависания
@@ -940,73 +856,10 @@ import Darwin.Mach
         }
         
             /// Показ расширенных инструкций при зависании
-    static func showAdvancedHangInstructions() {
-        guard let presentingVC = currentPresentingViewController else {
-            print("❌ Не найден presenting view controller для показа alert")
-            return
-        }
-        
-        // 🚨 СНАЧАЛА ПРИНУДИТЕЛЬНО ЗАКРЫВАЕМ ЗАВИСШИЙ ACTIVITY VC
-        if let activityVC = currentActivityViewController {
-            print("🔧 Принудительно закрываем зависший Activity ViewController")
-            activityVC.dismiss(animated: false) {
-                // После закрытия показываем alert
-                showHangAlert(from: presentingVC)
-            }
-        } else {
-            // Если Activity VC уже закрыт, показываем alert сразу
-            showHangAlert(from: presentingVC)
-        }
-    }
+    static func showAdvancedHangInstructions() { }
     
     /// Показ alert'а о зависании
-    private static func showHangAlert(from presentingVC: UIViewController) {
-        let alert = UIAlertController(
-            title: "🚨 Обнаружено зависание шаринга (iOS 18)",
-            message: """
-            Обнаружена известная проблема iOS 18 с шарингом!
-            
-            🔍 Что происходит:
-            • Система шаринга зависла на 20+ секунд
-            • Это распространенная проблема iOS 18
-            • Данные могут быть переданы, но интерфейс завис
-            
-            📱 Что делать:
-            1. Попробуйте еще раз
-            2. Обновите приложения (особенно Telegram)
-            3. Попробуйте другой способ шаринга
-            4. Перезагрузите устройство при необходимости
-            
-            🔄 Диагностика отправлена в лог
-            """,
-            preferredStyle: .alert
-        )
-        
-        // 🔧 ПРИНУДИТЕЛЬНАЯ ОЧИСТКА
-        alert.addAction(UIAlertAction(title: "🔧 Очистить состояние", style: .default) { _ in
-            forceCleanupSharing()
-        })
-        
-        // 📊 ПОКАЗАТЬ СТАТИСТИКУ
-        alert.addAction(UIAlertAction(title: "📊 Показать статистику", style: .default) { _ in
-            showDetailedErrorLog()
-        })
-        
-        // ❌ ЗАКРЫТЬ
-        alert.addAction(UIAlertAction(title: "❌ Закрыть", style: .cancel))
-        
-        // 📱 ПОКАЗ ALERT
-        DispatchQueue.main.async {
-            // Проверяем, что можно показать alert
-            if presentingVC.presentedViewController == nil {
-                presentingVC.present(alert, animated: true)
-            } else {
-                print("⚠️ Нельзя показать alert - уже что-то представлено")
-                // Вместо alert показываем простое уведомление в консоль
-                print("🚨 ЗАВИСАНИЕ ШАРИНГА ДЕТЕКТИРОВАНО - проверьте логи")
-            }
-        }
-    }
+    private static func showHangAlert(from presentingVC: UIViewController) { }
         
             /// Принудительная очистка состояния шаринга
     static func forceCleanupSharing() {

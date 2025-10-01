@@ -1253,8 +1253,60 @@ class CollageEditorViewController: UIViewController {
         
         // Рисуем фоновое изображение или цветной фон
         if let backgroundImage = backgroundImageView.image {
-            // Рисуем фоновое изображение, растягивая его на весь финальный размер
-            backgroundImage.draw(in: CGRect(origin: .zero, size: finalCollageSize))
+            // Рисуем фоновое изображение с учетом contentMode backgroundImageView
+            let canvasSize = finalCollageSize
+            let imageSize = backgroundImage.size
+            let imageAspect = imageSize.width / imageSize.height
+            let canvasAspect = canvasSize.width / canvasSize.height
+
+            var drawRect = CGRect(origin: .zero, size: canvasSize)
+            switch backgroundImageView.contentMode {
+            case .scaleAspectFill:
+                // Масштабируем так, чтобы заполнить весь холст, сохраняя пропорции
+                if imageAspect > canvasAspect {
+                    // Изображение более "широкое" — подгоняем по высоте
+                    let scale = canvasSize.height / imageSize.height
+                    let width = imageSize.width * scale
+                    drawRect = CGRect(x: (canvasSize.width - width) / 2, y: 0, width: width, height: canvasSize.height)
+                } else {
+                    // Изображение более "высокое" — подгоняем по ширине
+                    let scale = canvasSize.width / imageSize.width
+                    let height = imageSize.height * scale
+                    drawRect = CGRect(x: 0, y: (canvasSize.height - height) / 2, width: canvasSize.width, height: height)
+                }
+            case .scaleAspectFit:
+                // Масштабируем так, чтобы полностью уместить, сохраняя пропорции, возможны поля
+                if imageAspect > canvasAspect {
+                    // Подгоняем по ширине
+                    let scale = canvasSize.width / imageSize.width
+                    let height = imageSize.height * scale
+                    drawRect = CGRect(x: 0, y: (canvasSize.height - height) / 2, width: canvasSize.width, height: height)
+                } else {
+                    // Подгоняем по высоте
+                    let scale = canvasSize.height / imageSize.height
+                    let width = imageSize.width * scale
+                    drawRect = CGRect(x: (canvasSize.width - width) / 2, y: 0, width: width, height: canvasSize.height)
+                }
+            case .center:
+                // Без масштабирования, центрируем
+                drawRect = CGRect(x: (canvasSize.width - imageSize.width) / 2,
+                                  y: (canvasSize.height - imageSize.height) / 2,
+                                  width: imageSize.width,
+                                  height: imageSize.height)
+            default:
+                // По умолчанию ведем себя как .scaleAspectFill
+                if imageAspect > canvasAspect {
+                    let scale = canvasSize.height / imageSize.height
+                    let width = imageSize.width * scale
+                    drawRect = CGRect(x: (canvasSize.width - width) / 2, y: 0, width: width, height: canvasSize.height)
+                } else {
+                    let scale = canvasSize.width / imageSize.width
+                    let height = imageSize.height * scale
+                    drawRect = CGRect(x: 0, y: (canvasSize.height - height) / 2, width: canvasSize.width, height: height)
+                }
+            }
+
+            backgroundImage.draw(in: drawRect)
         } else if let backgroundColor = backgroundImageView.backgroundColor, backgroundColor != .clear {
             // Если установлен цветной фон, заливаем этим цветом
             backgroundColor.setFill()

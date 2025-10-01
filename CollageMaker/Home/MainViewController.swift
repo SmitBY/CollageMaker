@@ -227,12 +227,16 @@ class MainViewController: UIViewController {
 
         bannerTitleLabel.snp.makeConstraints { make in
             make.top.equalToSuperview().offset(16)
-            make.leading.trailing.equalToSuperview().inset(16)
+            make.leading.equalToSuperview().inset(16)
+            // Ослабляем trailing, чтобы избежать конфликтов при временной ширине 0 у супер-вью
+            make.trailing.lessThanOrEqualToSuperview().inset(16).priority(.low)
         }
 
         bannerSubtitleLabel.snp.makeConstraints { make in
             make.top.equalTo(bannerTitleLabel.snp.bottom).offset(8)
-            make.leading.trailing.equalToSuperview().inset(16)
+            make.leading.equalToSuperview().inset(16)
+            // Ослабляем trailing аналогично заголовку
+            make.trailing.lessThanOrEqualToSuperview().inset(16).priority(.low)
         }
 
         premiumButton.snp.makeConstraints { make in
@@ -250,14 +254,17 @@ class MainViewController: UIViewController {
         topTemplatesLabel.snp.makeConstraints { make in
             make.leading.equalToSuperview()
             make.centerY.equalToSuperview()
-            make.trailing.lessThanOrEqualTo(seeMoreButton.snp.leading).offset(-12)
+            // Дополнительно понижаем приоритет этой связи, чтобы не было предупреждений
+            make.trailing.lessThanOrEqualTo(seeMoreButton.snp.leading).offset(-12).priority(.low)
         }
 
         seeMoreButton.snp.makeConstraints { make in
             make.trailing.equalToSuperview()
             make.centerY.equalToSuperview()
             make.height.equalTo(32)
-            make.width.greaterThanOrEqualTo(140)
+            // Понижаем приоритет минимальной ширины, чтобы избежать конфликтов,
+            // когда контейнер временно имеет нулевую ширину при первом layout
+            make.width.greaterThanOrEqualTo(140).priority(.low)
         }
 
         seeMoreRightCircle.snp.makeConstraints { make in
